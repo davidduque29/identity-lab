@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Registro y cotejo facial con sesiones QR y administración."
+    />
+    <title>Identity Lab · Registro y administración</title>
+    <link rel="stylesheet" href="/style.css?v=6" />
+    <link rel="stylesheet" href="/portal.css?v=6" />
+    <script defer src="/portal.js?v=6"></script>
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="/portal.html"
+        ><span class="logo">◈</span> identity<span>lab</span></a
+      ><span class="badge">REGISTRO Y COTEJO FACIAL</span
+      ><button id="adminToggle" class="secondary" hidden>
+        <span id="headerAvatar">🌿</span> Administración
+      </button>
+    </header>
+    <main>
+      <section class="intro">
+        <div>
+          <p class="eyebrow">IDENTIDAD DIGITAL / TU SESIÓN</p>
+          <h1>Un registro.<br /><span>Tu próxima verificación.</span></h1>
+          <p class="lead">
+            Comienza en este equipo o continúa desde tu celular con un QR temporal.
+          </p>
+        </div>
+        <div class="intro-note">
+          <span>01 → 03</span>
+          <p>Captura · Datos · Comparación</p>
+          <small>Laboratorio experimental</small>
+        </div>
+      </section>
+      <p id="portalStatus" class="step-status" role="status" aria-live="polite">
+        Comprobando acceso…
+      </p>
+      <a
+        id="signIn"
+        class="primary link-button"
+        href="/signin-with-chatgpt?return_to=%2Fportal.html"
+        hidden
+        >Iniciar sesión con ChatGPT</a
+      >
+      <section id="userArea" class="portal-grid" hidden>
+        <article class="panel action-panel">
+          <p class="eyebrow">PRIMERA VEZ</p>
+          <h2>Registrar mi rostro</h2>
+          <p>
+            Una primera foto aceptada abre el formulario. Después completamos las otras
+            dos referencias y guardamos el registro.
+          </p>
+          <div class="button-row">
+            <button id="registerQr" class="primary">Continuar con QR</button
+            ><a class="secondary link-button" href="/index.html?flow=register"
+              >Usar este equipo</a
+            >
+          </div>
+        </article>
+        <article class="panel action-panel">
+          <p class="eyebrow">YA TENGO UN REGISTRO</p>
+          <h2>Verificar mi rostro</h2>
+          <p>
+            Selecciona tu documento y toma una foto nueva. Si coincide, verás los datos de
+            tu registro en la sesión autorizada.
+          </p>
+          <div class="button-row">
+            <button id="verifyQr" class="primary">Verificar con QR</button
+            ><a class="secondary link-button" href="/index.html?flow=verify"
+              >Usar este equipo</a
+            >
+          </div>
+        </article>
+      </section>
+      <section id="qrPanel" class="panel qr-panel" hidden>
+        <div>
+          <p class="eyebrow">CONTINÚA EN TU CELULAR</p>
+          <h2 id="qrTitle">Escanea el QR</h2>
+          <p>
+            Usa la cámara del celular. Se necesita una cuenta con permiso para entrar a
+            este Site.
+          </p>
+          <p id="qrState" role="status"></p>
+          <a id="qrLink" class="text-button" target="_blank" rel="noopener"
+            >Abrir enlace en este equipo</a
+          >
+        </div>
+        <div id="qrImage" aria-label="Código QR de la sesión"></div>
+      </section>
+      <section class="panel storage-note">
+        <strong>Destino actual: almacenamiento privado de Sites.</strong>
+        <p>
+          Datos estructurados en base de datos y fotos en almacenamiento de archivos. El
+          adaptador de Drive está pendiente de habilitación; todavía no se guarda en
+          Drive.
+        </p>
+        <p>
+          No hay prueba de vida ni verificación documental. El formulario contiene datos
+          declarados por el usuario. Esta demo no debe usarse como autenticación de
+          producción.
+        </p>
+      </section>
+      <section id="adminArea" hidden>
+        <div class="admin-title">
+          <div>
+            <p class="eyebrow">ACCESO RESTRINGIDO</p>
+            <h2>Administración</h2>
+          </div>
+          <button id="refreshAdmin" class="secondary">Actualizar</button>
+        </div>
+        <div class="portal-grid">
+          <section class="panel action-panel">
+            <p class="eyebrow">PERFIL ADMINISTRATIVO</p>
+            <h3>Elige un avatar</h3>
+            <p>
+              Una imagen para tu perfil; se guarda separada de las referencias
+              biométricas.
+            </p>
+            <div id="avatarPreview" class="avatar-preview"></div>
+            <div
+              id="avatarGrid"
+              class="avatar-grid"
+              aria-label="Avatares disponibles"
+            ></div>
+            <label class="file-label"
+              >Subir foto del equipo<input
+                id="avatarUpload"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+            /></label>
+            <p class="muted">
+              Desde Drive: descarga la imagen y selecciónala aquí. El selector directo de
+              Drive está pendiente de habilitación.
+            </p>
+            <p id="avatarStatus" role="status"></p>
+          </section>
+          <form id="rulesForm" class="panel action-panel">
+            <p class="eyebrow">REGLAS POR CLIENTE</p>
+            <h3>Intentos y sesiones</h3>
+            <label
+              >Máximo de fallos consecutivos<input
+                name="maxFailures"
+                type="number"
+                min="1"
+                max="10"
+                required /></label
+            ><label
+              >Pausa (minutos)<input
+                name="pauseMinutes"
+                type="number"
+                min="1"
+                max="1440"
+                required /></label
+            ><label
+              >Vigencia del QR (minutos)<input
+                name="qrMinutes"
+                type="number"
+                min="1"
+                max="15"
+                required /></label
+            ><label
+              >Umbral de distancia<input
+                name="threshold"
+                type="number"
+                min="0.30"
+                max="0.65"
+                step="0.01"
+                required /></label
+            ><label
+              >Conservar eventos (días)<input
+                name="retentionDays"
+                type="number"
+                min="1"
+                max="365"
+                required
+            /></label>
+            <p class="muted">
+              Las reglas nuevas aplican a los siguientes intentos. Las pausas activas
+              conservan su vencimiento. La depuración se ejecuta con el botón de abajo.
+            </p>
+            <button class="primary" type="submit">Guardar reglas</button
+            ><button id="purgeEvents" class="text-button" type="button">
+              Eliminar eventos vencidos
+            </button>
+            <p id="rulesStatus" role="status"></p>
+          </form>
+        </div>
+        <section class="panel admin-table">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">PERSONAS REGISTRADAS</p>
+              <h3 id="usersCount">Usuarios</h3>
+            </div>
+            <input
+              id="userSearch"
+              type="search"
+              placeholder="Filtrar esta página…"
+              aria-label="Filtrar usuarios de esta página"
+            />
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Persona</th>
+                  <th>Documento</th>
+                  <th>Estado</th>
+                  <th>Fallos</th>
+                  <th>Pausa hasta</th>
+                  <th>Registro</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="usersRows"></tbody>
+            </table>
+          </div>
+          <div class="button-row">
+            <button id="previousPage" class="secondary">Anterior</button
+            ><button id="nextPage" class="secondary">Siguiente</button>
+          </div>
+        </section>
+        <section class="panel admin-table">
+          <p class="eyebrow">INTENTOS Y AUDITORÍA</p>
+          <h3>Eventos de la página actual</h3>
+          <p>
+            IP pública observada; no demuestra ubicación exacta ni identidad. Las fotos de
+            comparación no se almacenan.
+          </p>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Acción / persona</th>
+                  <th>Resultado</th>
+                  <th>IP</th>
+                  <th>Regla / motivo</th>
+                </tr>
+              </thead>
+              <tbody id="eventsRows"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+      <dialog id="profileDetail">
+        <h2>Datos del registro</h2>
+        <div id="profileDetailBody"></div>
+        <button id="closeProfileDetail" class="secondary">Cerrar</button>
+      </dialog>
+      <footer>
+        <span>identitylab / Construido para aprender, David.</span
+        ><a href="/index.html">Abrir laboratorio local</a>
+      </footer>
+    </main>
+  </body>
+</html>

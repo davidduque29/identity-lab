@@ -8,14 +8,17 @@
       content="Laboratorio de biometría facial en tu navegador. Registra y compara tu rostro sin AWS."
     />
     <title>Identity Lab · David</title>
-    <link rel="stylesheet" href="style.css?v=4" />
+    <link rel="stylesheet" href="style.css?v=6" />
     <script defer src="vendor/face-api.min.js"></script>
-    <script defer src="capture-quality.js?v=4"></script>
-    <script defer src="app.js?v=4"></script>
+    <script defer src="capture-quality.js?v=5"></script>
+    <link rel="stylesheet" href="portal.css?v=6" />
+    <script defer src="workflow.js?v=6"></script>
+    <script defer src="app.js?v=6"></script>
   </head>
   <body>
     <header>
-      <a class="brand" href="#"><span class="logo">◈</span> identity<span>lab</span></a
+      <a class="brand" href="/portal.html"
+        ><span class="logo">◈</span> identity<span>lab</span></a
       ><span class="badge">LABORATORIO PERSONAL</span>
       <div class="local"><i></i> Procesamiento en este dispositivo</div>
     </header>
@@ -77,10 +80,40 @@
             </p>
             <p id="captureFeedback" class="capture-feedback" role="status" hidden></p>
             <label class="consent"
-              ><input id="consent" type="checkbox" /> Acepto capturar mi rostro y mostrar
-              las fotos y vectores solo en la memoria de esta página. No se suben al
-              servidor y se eliminan al borrar, recargar o cerrar.</label
+              ><input id="consent" type="checkbox" /> Acepto capturar mi rostro para esta
+              demo. En el flujo de registro, las fotos, los vectores y mis datos se
+              guardan tras confirmar el formulario. En el laboratorio local permanecen
+              solo en memoria.</label
             >
+            <section class="capture-evidence" aria-labelledby="captureEvidenceTitle">
+              <h3 id="captureEvidenceTitle">Confirmación de las tomas</h3>
+              <ol id="captureProgress" class="capture-progress">
+                <li data-state="pending">Foto 1: pendiente</li>
+                <li data-state="pending">Foto 2: pendiente</li>
+                <li data-state="pending">Foto 3: pendiente</li>
+              </ol>
+              <p id="captureOutcome" role="status">
+                Todavía no se ha guardado ninguna referencia.
+              </p>
+              <button id="retryCapture" type="button" class="secondary" hidden disabled>
+                Repetir el registro completo
+              </button>
+            </section>
+            <section class="network-panel">
+              <h3>Contexto de conexión</h3>
+              <label
+                ><input id="includeNetwork" type="checkbox" checked /> Incluir la IP
+                pública observada en cada captura</label
+              >
+              <p id="networkStatus" role="status">
+                La IP se consultará al tomar la foto, sin enviar su imagen.
+              </p>
+              <p class="muted">
+                En el registro persistente se incluye en la bitácora. Una VPN o red
+                compartida puede cambiar esta información. No demuestra identidad ni
+                ubicación.
+              </p>
+            </section>
             <div class="capture-actions">
               <button id="captureHere" class="primary" disabled>
                 1. Capturar 3 fotos de referencia</button
@@ -93,7 +126,7 @@
               ><button id="stop" class="secondary" disabled>Apagar</button>
             </div>
             <p id="status" role="status" aria-live="polite">
-              Listo para comenzar. Tus capturas no se envían al servidor.
+              Listo para comenzar. Revisa el consentimiento del flujo elegido.
             </p>
           </div>
         </section>

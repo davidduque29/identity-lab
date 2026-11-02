@@ -1,3 +1,5 @@
-dist/vendor/
-dist/models/
+public/vendor/
+public/models/
+dist/
+node_modules/
 .openai/
