@@ -72,7 +72,7 @@ function createHarness() {
     console,
   });
   vm.runInContext(
-    fs.readFileSync(path.join(__dirname, '../dist/app.js'), 'utf8'),
+    fs.readFileSync(path.join(__dirname, '../public/app.js'), 'utf8'),
     context,
   );
   return { nodes, context };
@@ -259,4 +259,27 @@ test('green readiness requires stable observations and resets on movement or sto
   await oldTick();
   assert.equal(nodes.get('captureHere').disabled, true);
   assert.match(nodes.get('alignmentHint').textContent, /Activa la cámara/);
+});
+
+test('failed second reference reports the first as discarded and offers a full retry', async () => {
+  const { context, nodes } = createHarness();
+  await vm.runInContext(
+    `(async () => {
+    await adapter.load();
+    prepareCapture = async () => true;
+    resumeMonitor = () => {};
+    stream = { getTracks: () => [] };
+    globalThis.partialSample = {descriptor: new Float32Array(128).fill(1), image:'data:image/jpeg;base64,partial', capturedAt:new Date(), box:{x:.3,y:.25,width:.4,height:.5}, network:{status:'observed',ip:'8.8.8.8'}};
+    let calls = 0;
+    adapter.capture = async () => { if (calls++ === 0) return partialSample; throw new Error('Revisa el encuadre.'); };
+    await enroll();
+  })()`,
+    context,
+  );
+  assert.match(nodes.get('captureOutcome').textContent, /foto 2/);
+  assert.match(nodes.get('captureOutcome').textContent, /descartarán/);
+  assert.equal(nodes.get('retryCapture').hidden, false);
+  assert.equal(context.partialSample.image, '');
+  assert.equal(context.partialSample.network, null);
+  assert.equal(nodes.get('memoryCount').textContent, '0 referencias · 0/5 intentos');
 });

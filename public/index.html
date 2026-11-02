@@ -8,10 +8,10 @@
       content="Laboratorio de biometría facial en tu navegador. Registra y compara tu rostro sin AWS."
     />
     <title>Identity Lab · David</title>
-    <link rel="stylesheet" href="style.css?v=4" />
+    <link rel="stylesheet" href="style.css?v=5" />
     <script defer src="vendor/face-api.min.js"></script>
-    <script defer src="capture-quality.js?v=4"></script>
-    <script defer src="app.js?v=4"></script>
+    <script defer src="capture-quality.js?v=5"></script>
+    <script defer src="app.js?v=5"></script>
   </head>
   <body>
     <header>
@@ -81,6 +81,34 @@
               las fotos y vectores solo en la memoria de esta página. No se suben al
               servidor y se eliminan al borrar, recargar o cerrar.</label
             >
+            <section class="capture-evidence" aria-labelledby="captureEvidenceTitle">
+              <h3 id="captureEvidenceTitle">Confirmación de las tomas</h3>
+              <ol id="captureProgress" class="capture-progress">
+                <li data-state="pending">Foto 1: pendiente</li>
+                <li data-state="pending">Foto 2: pendiente</li>
+                <li data-state="pending">Foto 3: pendiente</li>
+              </ol>
+              <p id="captureOutcome" role="status">
+                Todavía no se ha guardado ninguna referencia.
+              </p>
+              <button id="retryCapture" type="button" class="secondary" hidden disabled>
+                Repetir el registro completo
+              </button>
+            </section>
+            <section class="network-panel">
+              <h3>Contexto de conexión</h3>
+              <label
+                ><input id="includeNetwork" type="checkbox" checked /> Incluir la IP
+                pública observada en cada captura</label
+              >
+              <p id="networkStatus" role="status">
+                La IP se consultará al tomar la foto, sin enviar su imagen.
+              </p>
+              <p class="muted">
+                Solo en esta sesión. Una VPN o red compartida puede cambiar esta
+                información. No demuestra identidad ni ubicación.
+              </p>
+            </section>
             <div class="capture-actions">
               <button id="captureHere" class="primary" disabled>
                 1. Capturar 3 fotos de referencia</button

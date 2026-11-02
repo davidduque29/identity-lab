@@ -1,6 +1,6 @@
 # Identity Lab
 
-Demo educativa de biometría facial: captura desde webcam o cámara frontal, registro de tres muestras y comparación 1:1 en el navegador. No necesita AWS, claves de API ni un backend.
+Demo educativa de biometría facial: captura desde webcam o cámara frontal, registro de tres muestras y comparación 1:1 en el navegador. No necesita AWS ni claves de API. El reconocimiento sigue en el navegador; un endpoint del servidor aporta contexto de conexión.
 
 ## Ejecutar en tu computador
 
@@ -10,7 +10,7 @@ Requisitos: Python 3, conexión a Internet para descargar los assets inicialment
 git clone https://github.com/davidduque29/identity-lab.git
 cd identity-lab
 python scripts/download_assets.py
-python -m http.server 8000 --directory dist
+python -m http.server 8000 --directory public
 ```
 
 En Windows puedes usar `py` en lugar de `python`. Abre **http://localhost:8000** en el mismo computador. Usa localhost o un despliegue HTTPS: una dirección HTTP de la red local no suele permitir cámara en el celular.
@@ -25,8 +25,8 @@ En Windows puedes usar `py` en lugar de `python`. Abre **http://localhost:8000**
 
 ## Cómo funciona
 
-- `dist/index.html` y `dist/style.css`: interfaz responsive.
-- `dist/app.js`: cámara, captura en canvas, registro temporal, comparación y bitácora.
+- `public/index.html` y `public/style.css`: interfaz responsive.
+- `public/app.js`: cámara, captura en canvas, registro temporal, comparación y bitácora.
 - Adaptador `adapter`: carga del motor, captura de descriptor y distancia euclidiana.
 - face-api.js 0.22.2: TinyFaceDetector, FaceLandmark68Net y FaceRecognitionNet.
 - Cada muestra genera un vector de 128 valores. El resultado usa la media de las distancias contra las tres referencias.
@@ -52,7 +52,7 @@ Sintaxis JavaScript y Python comprobadas; integridad y disponibilidad de los ass
 
 ## Licencias
 
-face-api.js pertenece a su proyecto original: https://github.com/justadudewhohacks/face-api.js . Se incluye su licencia en `dist/vendor/LICENSE-face-api.txt`. Revisar las condiciones de los modelos y dependencias antes de una distribución o uso productivo. Esta entrega no asigna una licencia nueva al código propio.
+face-api.js pertenece a su proyecto original: https://github.com/justadudewhohacks/face-api.js . Se incluye su licencia en `public/vendor/LICENSE-face-api.txt`. Revisar las condiciones de los modelos y dependencias antes de una distribución o uso productivo. Esta entrega no asigna una licencia nueva al código propio.
 
 ## Pruebas de sesión
 
@@ -66,7 +66,7 @@ Valida la media de las tres distancias, la asociación de fotos y vectores, el u
 
 ## Guía de captura
 
-`dist/capture-quality.js` contiene reglas experimentales de tamaño, posición, inclinación de ojos, desviación de nariz e iluminación media. El contorno pasa de ámbar a verde tras tres evaluaciones consecutivas adecuadas y estables. La vista de cámara usa `object-fit: contain` y el óvalo adapta sus coordenadas a la resolución real del video, para evitar recortes engañosos en móviles.
+`public/capture-quality.js` contiene reglas experimentales de tamaño, posición, inclinación de ojos, desviación de nariz e iluminación media. El contorno pasa de ámbar a verde tras tres evaluaciones consecutivas adecuadas y estables. La vista de cámara usa `object-fit: contain` y el óvalo adapta sus coordenadas a la resolución real del video, para evitar recortes engañosos en móviles.
 
 Los botones requieren un encuadre adecuado reciente. La cuenta regresiva revisa el encuadre cada segundo y cancela la operación si deja de ser adecuado. Cada foto se valida también sobre el mismo fotograma que produce su vector. Esto orienta la captura; no es una calibración de calidad biométrica ni una prueba de vida.
 
@@ -77,6 +77,26 @@ El análisis en vivo y las capturas serializan la inferencia para evitar solapam
 El código propio de HTML, CSS y JavaScript y las pruebas usan dos espacios, con configuración en `.prettierrc.json`. El instalador Python usa cuatro espacios. Los assets de terceros conservan su distribución original y se excluyen del formateador.
 
 ```bash
-npx prettier@3.6.2 --check dist/app.js dist/capture-quality.js dist/index.html dist/style.css tests/*.cjs
+npx prettier@3.6.2 --check public/app.js public/capture-quality.js public/index.html public/style.css tests/*.cjs
 node --test tests/*.test.cjs
 ```
+
+## IP y confirmación de tomas
+
+La nueva vista marca cada referencia como pendiente, capturando, tomada o requiere repetir. Si el registro falla parcialmente, sus muestras se descartan y se solicita repetir las tres tomas; un registro anterior sigue activo. Cada foto registrada muestra su hora y la IP observada por el servidor, si está disponible. Se puede desactivar la inclusión de IP antes de capturar.
+
+El endpoint propio `/api/network-context` utiliza únicamente `CF-Connecting-IP`/`CF-Connecting-IPv6` del edge. No usa una cadena `X-Forwarded-For` aportada por el cliente, no consulta APIs externas, no recibe fotos y responde `Cache-Control: private, no-store`. No persiste el dato en una base de datos ni escribe logs de aplicación. Los registros de infraestructura de alojamiento son independientes.
+
+Una IP observada no identifica al dispositivo ni acredita identidad o ubicación. Si el intermediario de alojamiento oculta la IP de origen, la app lo informa como no disponible. No sustituye ese dato por la IP del intermediario ni bloquea la captura por ello. La comparación de rostros no cambia por un cambio de IP.
+
+### Ejecutar con servidor
+
+El cliente editable está en `public/`; `dist/` es salida generada. Se mantiene el starter Vinext y su integración `sites()` para el alojamiento administrado.
+
+```bash
+npm ci
+python scripts/download_assets.py
+npm run dev
+```
+
+La dirección y puerto se imprimen al iniciar. En local, el endpoint puede no tener una IP pública proporcionada por el edge; la interfaz indicará que no está disponible. La ejecución estática con Python permite probar biometría, pero no incluye el endpoint de IP.
