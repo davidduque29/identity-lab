@@ -1,6 +1,14 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const quality = require('../dist/capture-quality.js');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const path = require('node:path');
+const sandbox = { module: { exports: {} } };
+vm.runInNewContext(
+  fs.readFileSync(path.join(__dirname, '../public/capture-quality.js'), 'utf8'),
+  sandbox,
+);
+const quality = sandbox.module.exports;
 
 const good = {
   faces: 1,

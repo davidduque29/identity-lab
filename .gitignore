@@ -1,7 +1,9 @@
-# Assets verificados que descarga scripts/download_assets.py
-dist/vendor/face-api.min.js
-dist/models/
-# Estado local y secretos
+node_modules/
+/dist/
+.next/
+.wrangler/
+public/models/
+public/vendor/face-api.min.js
 __pycache__/
 *.pyc
 .env
@@ -9,6 +11,6 @@ __pycache__/
 !.env.example
 *.download
 .DS_Store
-# No incorporar capturas ni datos biométricos
 captures/
 biometric-data/
+next-env.d.ts

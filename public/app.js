@@ -86,6 +86,62 @@ function cameraFrame() {
   return canvas;
 }
 
+function networkLabel(context) {
+  if (context?.status === 'observed' && context.ip) return context.ip;
+  if (context?.status === 'disabled') return 'No incluida';
+  if (context?.status === 'proxy')
+    return 'No disponible: el servidor observa un intermediario';
+  if (context?.status === 'local') return 'No disponible en conexión local';
+  return 'No disponible';
+}
+async function readNetworkContext() {
+  if (!$('includeNetwork').checked) return { status: 'disabled', ip: null };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 2500);
+  try {
+    const response = await fetch('/api/network-context', {
+      cache: 'no-store',
+      credentials: 'same-origin',
+      signal: controller.signal,
+    });
+    if (
+      !response.ok ||
+      !response.headers.get('content-type')?.includes('application/json')
+    )
+      throw new Error('Context unavailable');
+    const data = await response.json();
+    return {
+      status: data.status,
+      ip: typeof data.ip === 'string' ? data.ip.slice(0, 45) : null,
+      observedAt: data.observedAt,
+    };
+  } catch {
+    return { status: 'unavailable', ip: null };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+function renderNetworkContext(context) {
+  $('networkStatus').textContent = 'IP observada: ' + networkLabel(context);
+}
+function showCaptureProgress(states, message, retry = false) {
+  const list = $('captureProgress');
+  list.replaceChildren();
+  states.forEach((state, i) => {
+    const labels = {
+      pending: 'pendiente',
+      taking: 'capturando…',
+      taken: 'tomada ✓',
+      retry: 'repetir',
+      cancelled: 'descartada: registro incompleto',
+    };
+    const item = el('li', '', 'Foto ' + (i + 1) + ': ' + labels[state]);
+    item.setAttribute('data-state', state);
+    list.append(item);
+  });
+  $('captureOutcome').textContent = message;
+  $('retryCapture').hidden = !retry;
+}
 const adapter = {
   name: 'face-api.js / FaceRecognitionNet',
   async load() {
@@ -146,6 +202,7 @@ const adapter = {
           image: canvas.toDataURL('image/jpeg', 0.85),
           capturedAt,
           box: measurement.box,
+          network: await readNetworkContext(),
         };
       } finally {
         canvas.width = 0;
@@ -311,6 +368,7 @@ function disposeSample(sample) {
   if (sample) {
     sample.descriptor.fill(0);
     sample.image = '';
+    if (sample.network) sample.network = null;
   }
 }
 function clearAttempts() {
@@ -357,6 +415,17 @@ function openPhoto(sample, title) {
         '. El recuadro indica el rostro detectado. Imagen sin efecto espejo.',
     ),
   );
+  details.append(
+    el(
+      'p',
+      'network-detail',
+      'IP observada en esta toma: ' + networkLabel(sample.network),
+    ),
+  );
+  if (sample.network?.observedAt)
+    details.append(
+      el('p', 'muted', 'Consulta de conexión: ' + sample.network.observedAt),
+    );
   const vector = el('details', 'vector-details');
   vector.append(el('summary', '', 'Inspeccionar los 128 valores del vector facial'));
   vector.append(
@@ -380,6 +449,7 @@ function sampleCard(sample, title) {
   caption.append(
     el('strong', '', title),
     el('span', '', timeLabel(sample.capturedAt)),
+    el('span', '', 'IP: ' + networkLabel(sample.network)),
     el('small', '', 'Ampliar foto y ver vector ↗'),
   );
   card.append(button, caption);
@@ -461,6 +531,16 @@ function renderInspection() {
         'Decisión calculada con valores completos; cifras mostradas redondeadas. Se comparan vectores de 128 números, no los píxeles de las fotos. El umbral mostrado es el usado en este intento.',
       ),
     );
+    const referenceIPs = references.map((ref) => ref.network?.ip).filter(Boolean);
+    if (a.sample.network?.ip && referenceIPs.some((ip) => ip !== a.sample.network.ip)) {
+      calculation.append(
+        el(
+          'p',
+          'network-change',
+          'La IP observada cambió respecto al registro. Puede ocurrir al cambiar de red o usar VPN; no demuestra suplantación.',
+        ),
+      );
+    }
     comparison.append(calculation);
   }
   const history = $('attemptHistory');
@@ -503,6 +583,8 @@ function controls() {
   $('start').disabled = busy || !!stream;
   $('stop').disabled = !stream;
   $('captureHere').disabled = !ready || !loaded;
+  $('retryCapture').disabled = !ready || !loaded;
+  $('includeNetwork').disabled = busy;
   $('compareHere').disabled = !ready || !loaded || !references.length;
   $('consent').disabled = !!stream || busy;
   $('captureHere').textContent = busy
@@ -536,6 +618,12 @@ function showAttempt(a) {
   );
 }
 function stop() {
+  if (busy)
+    showCaptureProgress(
+      ['retry', 'retry', 'retry'],
+      'Registro o comparación interrumpidos. Repite la operación; el registro previo, si existe, se conserva.',
+      true,
+    );
   generation++;
   pauseMonitor();
   captureReady = false;
@@ -629,12 +717,26 @@ async function enroll() {
     return;
   }
   $('captureFeedback').hidden = true;
+  let captureIndex = 0;
+  const progress = ['pending', 'pending', 'pending'];
+  showCaptureProgress(progress, 'Registro iniciado: prepararemos tres referencias.');
   try {
     for (let i = 0; i < 3; i++) {
+      captureIndex = i;
+      progress[i] = 'taking';
+      showCaptureProgress(progress, 'Tomando la foto ' + (i + 1) + ' de 3…');
       status('Registrando muestra ' + (i + 1) + ' de 3. Mantén el rostro centrado…');
       const sample = await adapter.capture();
       samples.push(sample);
       if (token !== generation) return;
+      progress[i] = 'taken';
+      showCaptureProgress(
+        progress,
+        i === 0
+          ? 'Primera foto tomada correctamente. Faltan las fotos 2 y 3.'
+          : 'Foto ' + (i + 1) + ' tomada correctamente.',
+      );
+      renderNetworkContext(sample.network);
       captureFlash('✓ Referencia ' + (i + 1) + ' de 3 capturada');
       setGuidance(
         'Referencia ' + (i + 1) + '/3 capturada. Mantente quieto.',
@@ -647,6 +749,10 @@ async function enroll() {
     references.forEach(disposeSample);
     references = samples;
     committed = true;
+    showCaptureProgress(
+      ['taken', 'taken', 'taken'],
+      'Las tres fotos fueron tomadas y registradas. No necesitas repetirlas.',
+    );
     $('reference').textContent =
       '✓ Referencia activa · 3 fotos y 3 vectores · solo en memoria';
     result(
@@ -662,7 +768,20 @@ async function enroll() {
   } catch (e) {
     if (token === generation) {
       status(e.message);
-      result('Registro incompleto', e.message, 'fail');
+      const state = progress.map((_, i) => (i < samples.length ? 'cancelled' : 'retry'));
+      const message =
+        'La foto ' +
+        (captureIndex + 1) +
+        ' no se pudo aceptar. ' +
+        (samples.length
+          ? 'Se tomaron ' +
+            samples.length +
+            ' foto(s), pero se descartarán porque el registro está incompleto. '
+          : 'No se guardó ninguna foto nueva. ') +
+        'Repite las tres tomas cuando el contorno esté verde.' +
+        (references.length ? ' Tu registro anterior sigue activo.' : '');
+      showCaptureProgress(state, message, true);
+      result('Debes repetir el registro', message + ' ' + e.message, 'fail');
       log('Registro incompleto: ' + e.message);
     }
   } finally {
@@ -704,6 +823,7 @@ async function verify() {
     selectedAttempt = attempt;
     showAttempt(attempt);
     renderInspection();
+    renderNetworkContext(sample.network);
     captureFlash('✓ Foto NUEVA del intento ' + attempt.number + ' capturada y comparada');
     status(
       'PASO 2 COMPLETO: foto NUEVA tomada a las ' +
@@ -738,6 +858,11 @@ function reset() {
   references = [];
   $('captureFeedback').hidden = true;
   $('captureFeedback').textContent = '';
+  showCaptureProgress(
+    ['pending', 'pending', 'pending'],
+    'Todavía no se ha guardado ninguna referencia.',
+  );
+  $('networkStatus').textContent = 'Contexto de conexión borrado de esta sesión.';
   $('reference').textContent = 'Sin referencia registrada';
   $('log').replaceChildren();
   renderInspection();
@@ -749,6 +874,7 @@ function reset() {
   controls();
 }
 $('captureHere').addEventListener('click', enroll);
+$('retryCapture').addEventListener('click', enroll);
 $('compareHere').addEventListener('click', verify);
 $('start').addEventListener('click', start);
 $('stop').addEventListener('click', () => {

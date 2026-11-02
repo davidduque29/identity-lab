@@ -929,3 +929,69 @@ dialog::backdrop {
     font-size: 76px;
   }
 }
+
+.capture-evidence,
+.network-panel {
+  margin: 16px 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fafbf8;
+}
+.capture-progress {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  list-style: none;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 0;
+}
+.capture-progress li {
+  padding: 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  background: #edf0e8;
+}
+.capture-progress li[data-state='taken'] {
+  background: #e1f4df;
+  color: #205331;
+}
+.capture-progress li[data-state='taking'] {
+  background: #e4effd;
+  color: #244e71;
+}
+.capture-progress li[data-state='retry'],
+.capture-progress li[data-state='cancelled'] {
+  background: #fff0e1;
+  color: #785128;
+}
+.capture-evidence p,
+.network-panel p,
+.network-panel label {
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.network-panel label {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.network-detail {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.sample-card figcaption span {
+  overflow-wrap: anywhere;
+}
+#retryCapture[hidden] {
+  display: none;
+}
+
+.network-change {
+  padding: 12px;
+  background: #fff4df;
+  border: 1px solid #ddc28a;
+  border-radius: 8px;
+  font-size: 12px;
+}
