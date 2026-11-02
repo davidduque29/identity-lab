@@ -17,9 +17,9 @@ En Windows puedes usar `py` en lugar de `python`. Abre **http://localhost:8000**
 
 1. Espera el mensaje «Motor local listo».
 2. Marca la autorización y activa la cámara.
-3. Pulsa **Capturar y registrar mi rostro**, debajo de la cámara.
-4. Mantén un único rostro centrado mientras se toman tres muestras.
-5. Pulsa **Comparar nueva captura**.
+3. Sigue las indicaciones de encuadre en vivo: acercarse, alejarse, centrarse, enderezar la cabeza o mejorar la luz. Espera el contorno verde.
+4. Pulsa **1. Capturar 3 fotos de referencia**. Tras una cuenta regresiva de 3 segundos se toman tres fotos y se confirma cada captura.
+5. Vuelve a esperar el contorno verde y pulsa **2. Tomar una foto NUEVA y comparar**. Otra cuenta regresiva de 3 segundos precede a una sola captura nueva.
 6. Abre «Fotos y comparación»: verás las tres referencias y la captura nueva. Pulsa una imagen para ampliarla e inspeccionar el vector.
 7. Consulta cada distancia, el promedio y el umbral usado. Puedes revisar los últimos cinco intentos; volver a registrar borra el historial anterior.
 
@@ -63,3 +63,20 @@ node --test tests/session.test.cjs
 ```
 
 Valida la media de las tres distancias, la asociación de fotos y vectores, el umbral guardado por intento, el límite de cinco intentos y el borrado incluso con una inferencia pendiente. Usa un motor simulado; no mide precisión biométrica ni sustituye la prueba en cámara real.
+
+## Guía de captura
+
+`dist/capture-quality.js` contiene reglas experimentales de tamaño, posición, inclinación de ojos, desviación de nariz e iluminación media. El contorno pasa de ámbar a verde tras tres evaluaciones consecutivas adecuadas y estables. La vista de cámara usa `object-fit: contain` y el óvalo adapta sus coordenadas a la resolución real del video, para evitar recortes engañosos en móviles.
+
+Los botones requieren un encuadre adecuado reciente. La cuenta regresiva revisa el encuadre cada segundo y cancela la operación si deja de ser adecuado. Cada foto se valida también sobre el mismo fotograma que produce su vector. Esto orienta la captura; no es una calibración de calidad biométrica ni una prueba de vida.
+
+El análisis en vivo y las capturas serializan la inferencia para evitar solapamientos. Al apagar cámara, ocultar la página o borrar la sesión se cancelan el monitor y las cuentas regresivas pendientes.
+
+## Formato del código
+
+El código propio de HTML, CSS y JavaScript y las pruebas usan dos espacios, con configuración en `.prettierrc.json`. El instalador Python usa cuatro espacios. Los assets de terceros conservan su distribución original y se excluyen del formateador.
+
+```bash
+npx prettier@3.6.2 --check dist/app.js dist/capture-quality.js dist/index.html dist/style.css tests/*.cjs
+node --test tests/*.test.cjs
+```
