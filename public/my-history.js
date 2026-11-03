@@ -129,6 +129,8 @@
       get('more').hidden = offset === null;
       status('Estás viendo únicamente la información de tu cuenta.', 'success');
     } catch (error) {
+      if (get('memberContent').hidden)
+        get('accountEmail').textContent = 'Acceso personal protegido';
       status(error.message, 'error');
     } finally {
       get('more').disabled = false;
