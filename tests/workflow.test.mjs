@@ -543,3 +543,88 @@ test('storage configuration is returned only to administrators', async () => {
   assert.equal(Object.hasOwn(visitor.content, 'storage'), false);
   assert.equal(Object.hasOwn(visitor.content, 'drive'), false);
 });
+
+test('personal history binds new enrollment to the verified account, isolates users and excludes biometric internals', async () => {
+  const h = harness();
+  h.env.PUBLIC_DEMO = true;
+  h.env.AUTHENTICATED_ACCOUNT = true;
+  const alice = { actor: 'alice', email: 'alice@example.test' };
+  const bob = { actor: 'bob', email: 'bob@example.test' };
+  const created = await h.call('register', registration(), alice);
+  assert.equal(created.status, 200);
+  assert.equal(
+    h.sql.prepare('SELECT account_id FROM profiles').get().account_id,
+    'alice',
+  );
+  const own = await h.call('my-history', undefined, alice);
+  assert.equal(own.content.profiles.length, 1);
+  assert.equal(own.content.events.length, 1);
+  assert.equal(own.content.profiles[0].biometric, undefined);
+  assert.equal(own.content.profiles[0].media, undefined);
+  assert.equal(own.content.events[0].payload, undefined);
+  const other = await h.call('my-history', undefined, bob);
+  assert.equal(other.content.profiles.length, 0);
+  assert.equal(other.content.events.length, 0);
+  assert.equal((await h.call('admin', undefined, alice)).status, 403);
+  const deniedImage = await h.call(
+    'my-reference&id=' + created.content.id,
+    undefined,
+    bob,
+  );
+  assert.equal(deniedImage.status, 404);
+  h.sql.exec('DELETE FROM events');
+  assert.equal((await h.call('my-history', undefined, alice)).content.profiles.length, 1);
+  h.env.AUTHENTICATED_ACCOUNT = false;
+  assert.equal((await h.call('my-history', undefined, alice)).status, 401);
+});
+
+test('guest enrollments stay unassigned and user-supplied account IDs are ignored', async () => {
+  const h = harness();
+  h.env.PUBLIC_DEMO = true;
+  const created = await h.call('register', registration({ account_id: 'victim' }), {
+    actor: 'guest',
+    email: 'guest@visitor.invalid',
+  });
+  assert.equal(created.status, 200);
+  assert.equal(h.sql.prepare('SELECT account_id FROM profiles').get().account_id, null);
+  h.env.AUTHENTICATED_ACCOUNT = true;
+  assert.equal(
+    (
+      await h.call('my-history', undefined, {
+        actor: 'victim',
+        email: 'victim@example.test',
+      })
+    ).content.profiles.length,
+    0,
+  );
+});
+
+test('deletion requests require ownership and record intent without deleting the profile', async () => {
+  const h = harness();
+  h.env.PUBLIC_DEMO = true;
+  h.env.AUTHENTICATED_ACCOUNT = true;
+  const alice = { actor: 'alice', email: 'alice@example.test' };
+  const created = await h.call('register', registration(), alice);
+  assert.equal(
+    (
+      await h.call(
+        'request-my-deletion',
+        { id: created.content.id },
+        { actor: 'bob', email: 'bob@example.test' },
+      )
+    ).status,
+    404,
+  );
+  assert.equal(
+    (await h.call('request-my-deletion', { id: created.content.id }, alice)).content
+      .requested,
+    true,
+  );
+  assert.equal(h.sql.prepare('SELECT COUNT(*) AS n FROM profiles').get().n, 1);
+  assert.equal(
+    h.sql
+      .prepare("SELECT COUNT(*) AS n FROM events WHERE action='deletion-request'")
+      .get().n,
+    1,
+  );
+});

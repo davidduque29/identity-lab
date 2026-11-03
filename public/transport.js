@@ -20,7 +20,11 @@
       }),
     );
     history.replaceState(null, '', location.pathname);
-    location.replace('portal.html#administracion');
+    location.replace(
+      callback.get('type') === 'signup'
+        ? 'my-history.html'
+        : 'portal.html#administracion',
+    );
   }
 
   async function credentials() {
@@ -37,6 +41,7 @@
       );
       if (response.ok) {
         const session = await response.json();
+        session.expires_at = Math.floor(Date.now() / 1000) + session.expires_in;
         localStorage.setItem(prefix + 'admin', JSON.stringify(session));
         return session.access_token;
       }

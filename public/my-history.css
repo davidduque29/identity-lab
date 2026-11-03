@@ -1,0 +1,78 @@
+.history-shell {
+  max-width: 1000px;
+  margin: 32px auto;
+  padding: 0 18px;
+}
+.history-section,
+.history-welcome {
+  padding: clamp(20px, 4vw, 32px);
+  margin-bottom: 22px;
+}
+.history-welcome h1 {
+  font-size: clamp(28px, 5vw, 40px);
+  margin: 8px 0;
+}
+.profile-card {
+  border: 1px solid #d8e5dc;
+  border-radius: 12px;
+  padding: 20px;
+  margin: 16px 0;
+  overflow-wrap: anywhere;
+}
+.profile-photo {
+  width: 150px;
+  max-width: 100%;
+  aspect-ratio: 4/3;
+  object-fit: cover;
+  border-radius: 10px;
+}
+.history-empty {
+  padding: 20px;
+  background: #edf4f8;
+  border-radius: 12px;
+  border-left: 4px solid #3e7da5;
+}
+.activity-item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 0;
+  border-bottom: 1px solid #dfe7e1;
+}
+.activity-item time {
+  color: #556a60;
+  font-size: 13px;
+}
+.activity-result {
+  border-radius: 20px;
+  padding: 6px 12px;
+  background: #eaf1eb;
+  font-size: 13px;
+}
+.activity-result[data-match='false'] {
+  background: #fff1e7;
+  color: #83450f;
+}
+.member-access {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 16px;
+  border-radius: 24px;
+  background: #e8f0fa;
+  color: #254d76;
+  font-weight: 600;
+  text-decoration: none;
+}
+.history-page header {
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.history-page .button-row a {
+  text-decoration: none;
+}
+#signupConsentLabel {
+  font-weight: 400;
+  line-height: 1.6;
+}

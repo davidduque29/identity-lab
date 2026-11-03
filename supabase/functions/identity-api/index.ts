@@ -102,7 +102,10 @@ Deno.serve(async (request: Request) => {
     } else {
       const { data, error } = await client.auth.getUser(token);
       if (error || !data.user || !data.user.email_confirmed_at || data.user.is_anonymous)
-        return response({ error: 'La sesión administrativa no es válida.' }, 401);
+        return response(
+          { error: 'Tu sesión no es válida. Vuelve a iniciar sesión.' },
+          401,
+        );
       actor = data.user.id;
       email = data.user.email!;
     }
@@ -137,6 +140,7 @@ Deno.serve(async (request: Request) => {
     });
     const result = await handleLab(forwarded, {
       PUBLIC_DEMO: true,
+      AUTHENTICATED_ACCOUNT: !token.startsWith('il_'),
       DB: db,
       STORAGE: storage,
       ADMIN_EMAIL: owner ? JSON.parse(owner.payload) : '',

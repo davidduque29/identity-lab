@@ -9,6 +9,8 @@ function harness({
   admin = true,
   failure = false,
   timeout = false,
+  member = false,
+  contextFailure = false,
 } = {}) {
   const nodes = new Map(),
     saved = new Map(),
@@ -46,7 +48,10 @@ function harness({
     window: {
       IDENTITY_DEPLOYMENT: { url: 'https://auth.example.test', publishableKey: 'fake' },
     },
-    document: { getElementById: get },
+    document: {
+      getElementById: get,
+      body: { getAttribute: () => (member ? 'member' : null) },
+    },
     location,
     URL,
     URLSearchParams,
@@ -73,14 +78,16 @@ function harness({
         if (options.signal.aborted) throw new Error('aborted');
       }
       return {
-        ok: !failure,
+        ok: !failure && !(contextFailure && url.includes('action=context')),
         status: failure ? 429 : 200,
         json: async () =>
-          url.includes('action=context')
-            ? { admin }
-            : url.endsWith('/auth/v1/user')
-              ? { email: 'verified@example.test' }
-              : session,
+          url.includes('/signup?')
+            ? { id: 'new-account' }
+            : url.includes('action=context')
+              ? { admin }
+              : url.endsWith('/auth/v1/user')
+                ? { email: 'verified@example.test' }
+                : session,
       };
     },
   });
@@ -174,7 +181,7 @@ test('invalid recovery token cannot change a password or leave a blank locked em
 test('saved password is reported separately from denied administrative access', async () => {
   const h = harness({
     hash: '#access_token=fake&refresh_token=fake&type=recovery',
-    admin: false,
+    contextFailure: true,
   });
   await tick();
   h.get('confirmPassword').value = h.get('password').value;
@@ -182,6 +189,24 @@ test('saved password is reported separately from denied administrative access', 
   assert.match(h.get('status').textContent, /contraseña se guardó correctamente/);
   assert.equal(h.get('email').readOnly, false);
   assert.equal(h.location.destination, undefined);
+});
+test('member account can sign in but admin-only sign-in still rejects non-admins', async () => {
+  const h = harness({ member: true, admin: false });
+  await submit(h);
+  assert.equal(h.location.destination, 'my-history.html');
+});
+test('member signup waits for email confirmation and never grants a session or role', async () => {
+  const h = harness({ member: true, admin: false });
+  h.get('signupToggle').onclick();
+  h.get('password').value = 'unique test phrase 25';
+  h.get('confirmPassword').value = h.get('password').value;
+  h.get('signupConsent').checked = true;
+  await submit(h);
+  assert.ok(h.calls[0].url.includes('/signup?'));
+  assert.deepEqual(Object.keys(h.calls[0].body).sort(), ['email', 'password']);
+  assert.equal(h.saved.has('identity-lab:admin'), false);
+  assert.equal(h.location.destination, undefined);
+  assert.match(h.get('status').textContent, /confirmar/);
 });
 test('password visibility toggles without changing its value', () => {
   const h = harness();

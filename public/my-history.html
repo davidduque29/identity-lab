@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Mi historial · Identity Lab</title>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="portal.css" />
+    <link rel="stylesheet" href="admin-login.css" />
+    <link rel="stylesheet" href="my-history.css" />
+    <script src="deployment-config.js"></script>
+    <script defer src="transport.js"></script>
+    <script defer src="my-history.js"></script>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <meta name="theme-color" content="#245f4d" />
+  </head>
+  <body class="admin-login-page history-page">
+    <header>
+      <a class="brand" href="portal.html"><span class="logo">◈</span>identitylab</a
+      ><a class="back-to-lab" href="portal.html">← Volver al laboratorio</a>
+    </header>
+    <main class="history-shell">
+      <section class="panel history-welcome">
+        <p class="eyebrow">TU CUENTA PERSONAL</p>
+        <h1>Mi historial</h1>
+        <p id="accountEmail">Comprobando tu sesión…</p>
+        <p>Consulta los registros y los intentos realizados con tu cuenta iniciada.</p>
+        <div class="button-row">
+          <a id="signInLink" class="link-button primary" href="user-access.html"
+            >Entrar o crear cuenta</a
+          ><button id="signOut" class="secondary" hidden>Cerrar sesión</button>
+        </div>
+      </section>
+      <p id="status" role="status" aria-live="polite">Cargando tu historial…</p>
+      <div id="memberContent" hidden>
+        <section class="panel history-section">
+          <h2>▣ Mis registros faciales</h2>
+          <div id="profiles"></div>
+          <div class="button-row">
+            <a class="link-button primary" href="index.html?flow=register"
+              >Registrar mi rostro</a
+            ><a class="link-button secondary" href="index.html?flow=verify"
+              >Comparar mi rostro</a
+            >
+          </div>
+        </section>
+        <section class="panel history-section">
+          <h2>◷ Mi actividad</h2>
+          <p>
+            La foto nueva de comparación es temporal y no se guarda en este historial. El
+            resultado es orientativo.
+          </p>
+          <div id="activity"></div>
+          <button id="more" class="secondary" hidden>Ver actividad anterior</button>
+        </section>
+        <section class="panel history-section">
+          <h2>♧ Tu información</h2>
+          <p>
+            Conservamos tu foto de referencia, los datos que declaraste al registrarte, un
+            descriptor facial y los resultados de los intentos. Los registros previos
+            realizados sin cuenta no se vinculan automáticamente. Para solicitar su
+            eliminación, usa el botón de tu registro; la solicitud requiere revisión
+            administrativa.
+          </p>
+          <a class="back-to-lab" href="user-access.html#salir"
+            >Cerrar sesión y recuperar el acceso →</a
+          >
+        </section>
+      </div>
+    </main>
+  </body>
+</html>

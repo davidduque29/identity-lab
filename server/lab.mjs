@@ -130,6 +130,7 @@ export async function handleLab(request, env) {
           : null;
         return json({
           admin,
+          member: !!env.AUTHENTICATED_ACCOUNT,
           existingRecord: env.PUBLIC_DEMO
             ? await one(
                 'SELECT profiles.id FROM profiles JOIN events ON profiles.id=events.profile_id WHERE profiles.tenant=? AND events.actor=? AND events.action=? AND profiles.status=? ORDER BY events.created_at DESC LIMIT 1',
@@ -157,6 +158,57 @@ export async function handleLab(request, env) {
               }
             : undefined,
           avatar: avatar ? parse(avatar.payload) : { kind: 'preset', value: '🌿' },
+        });
+      }
+      if (['my-history', 'my-reference'].includes(action)) {
+        if (!env.AUTHENTICATED_ACCOUNT)
+          fail('Inicia sesión con tu cuenta para consultar tu historial.', 401);
+        if (action === 'my-reference') {
+          const p = await one(
+            'SELECT media,status FROM profiles WHERE id=? AND tenant=? AND account_id=?',
+            url.searchParams.get('id'),
+            TENANT,
+            actor,
+          );
+          if (!p || p.status !== 'active') fail('Registro no disponible.', 404);
+          const image = await storage.get(parse(p.media)[0]);
+          if (!image) fail('Foto no disponible.', 404);
+          return new Response(image.body, {
+            headers: {
+              'Content-Type': image.httpMetadata.contentType,
+              'Cache-Control': 'private, no-store',
+            },
+          });
+        }
+        const offset = Math.min(
+          100000,
+          Math.max(0, Math.floor(Number(url.searchParams.get('offset')) || 0)),
+        );
+        const profiles = await list(
+          'SELECT id,data,status,created_at,updated_at FROM profiles WHERE tenant=? AND account_id=? ORDER BY created_at DESC LIMIT 50',
+          TENANT,
+          actor,
+        );
+        const events = await list(
+          'SELECT id,profile_id,action,payload,created_at FROM events WHERE tenant=? AND actor=? ORDER BY created_at DESC LIMIT 51 OFFSET ?',
+          TENANT,
+          actor,
+          offset,
+        );
+        return json({
+          email,
+          profiles: profiles.map((p) => ({ ...p, data: parse(p.data) })),
+          events: events.slice(0, 50).map((e) => {
+            const payload = parse(e.payload);
+            return {
+              id: e.id,
+              action: e.action,
+              createdAt: e.created_at,
+              match: e.action === 'verify' ? payload.result?.match : undefined,
+              similarity: e.action === 'verify' ? payload.result?.similarity : undefined,
+            };
+          }),
+          nextOffset: events.length > 50 ? offset + 50 : null,
         });
       }
       if (action === 'qr-status') {
@@ -302,6 +354,19 @@ export async function handleLab(request, env) {
     }
     const raw = new TextDecoder().decode(bytes);
     const data = parse(raw);
+    if (action === 'request-my-deletion') {
+      if (!env.AUTHENTICATED_ACCOUNT)
+        fail('Inicia sesión para solicitar la eliminación.', 401);
+      const owned = await one(
+        'SELECT media,status FROM profiles WHERE id=? AND tenant=? AND account_id=?',
+        String(data.id),
+        TENANT,
+        actor,
+      );
+      if (!owned) fail('Registro no disponible.', 404);
+      await audit('deletion-request', { status: 'pending' }, String(data.id));
+      return json({ requested: true });
+    }
     if (action === 'qr') {
       if (!['register', 'verify'].includes(data.mode))
         fail('Selecciona registro o verificación.');
@@ -549,7 +614,7 @@ export async function handleLab(request, env) {
               )
           : db
               .prepare(
-                'INSERT INTO profiles (id,tenant,owner,document_key,data,biometric,media,created_at,updated_at,last_attempt) VALUES (?,?,?,?,?,?,?,?,?,?)',
+                'INSERT INTO profiles (id,tenant,owner,document_key,data,biometric,media,created_at,updated_at,last_attempt,account_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
               )
               .bind(
                 id,
@@ -562,6 +627,7 @@ export async function handleLab(request, env) {
                 now,
                 now,
                 idempotency,
+                env.AUTHENTICATED_ACCOUNT ? actor : null,
               );
         const eventPayload = JSON.stringify({
           model: MODEL,

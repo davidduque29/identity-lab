@@ -4,6 +4,11 @@
   const get = (id) => document.getElementById(id);
   const storageKey = 'identity-lab:admin';
   const callback = new URLSearchParams(location.hash.slice(1));
+  const memberAccess =
+    document.body?.getAttribute('data-audience') === 'member' ||
+    callback.get('type') === 'signup';
+  const signingUp = () => mode === 'signup';
+  const choosingPassword = () => mode === 'set-password' || signingUp();
   let mode = 'login',
     recoveryToken = null,
     pending = false,
@@ -20,7 +25,7 @@
     get(id).textContent = label;
   }
   function updatePasswordFeedback() {
-    if (mode !== 'set-password') return;
+    if (!choosingPassword()) return;
     const password = get('password').value;
     const confirmation = get('confirmPassword').value;
     const longEnough = [...password].length >= 15;
@@ -114,7 +119,7 @@
       method: 'GET',
       token: session.access_token,
     });
-    if (!context.admin)
+    if (!context.admin && !memberAccess && mode !== 'set-password')
       throw new Error('Tu cuenta no tiene permisos de administración en Identity Lab.');
     if (current !== attempt) return;
     localStorage.setItem(
@@ -125,37 +130,61 @@
           session.expires_at || Math.floor(Date.now() / 1000) + session.expires_in,
       }),
     );
-    location.replace('portal.html#administracion');
+    sessionStorage.removeItem('identity-lab:qr');
+    location.replace(
+      memberAccess || !context.admin ? 'my-history.html' : 'portal.html#administracion',
+    );
   }
   function setMode(next) {
     mode = next;
-    get('confirmLabel').hidden = next !== 'set-password';
-    get('confirmPassword').required = next === 'set-password';
-    get('passwordHint').hidden = next !== 'set-password';
-    get('passwordFeedback').hidden = next !== 'set-password';
-    get('passwordLabelText').textContent =
-      next === 'set-password' ? 'Nueva contraseña' : 'Contraseña';
-    get('password').placeholder =
-      next === 'set-password'
-        ? 'Crea una frase de al menos 15 caracteres'
-        : 'Escribe tu contraseña';
-    get('password').autocomplete =
-      next === 'set-password' ? 'new-password' : 'current-password';
+    get('confirmLabel').hidden = !choosingPassword();
+    get('confirmPassword').required = choosingPassword();
+    get('passwordHint').hidden = !choosingPassword();
+    get('passwordFeedback').hidden = !choosingPassword();
+    get('passwordLabelText').textContent = choosingPassword()
+      ? 'Nueva contraseña'
+      : 'Contraseña';
+    get('password').placeholder = choosingPassword()
+      ? 'Crea una frase de al menos 15 caracteres'
+      : 'Escribe tu contraseña';
+    get('password').autocomplete = choosingPassword()
+      ? 'new-password'
+      : 'current-password';
     get('password').minLength = 0;
-    get('recover').hidden = next === 'set-password';
-    get('submit').textContent =
-      next === 'set-password' ? 'Guardar contraseña y entrar' : 'Entrar';
+    get('recover').hidden = choosingPassword();
+    get('submit').textContent = signingUp()
+      ? 'Crear mi cuenta'
+      : next === 'set-password'
+        ? 'Guardar contraseña y entrar'
+        : 'Entrar';
     get('email').required = next !== 'set-password';
     get('email').readOnly = next === 'set-password';
     get('emailLabel').hidden = false;
     get('recoveryAccountHint').hidden = next !== 'set-password';
-    get('cancelRecovery').hidden = next !== 'set-password';
-    get('loginInstruction').textContent =
-      next === 'set-password'
+    get('cancelRecovery').hidden = !choosingPassword();
+    if (get('signupToggle'))
+      get('signupToggle').hidden = !memberAccess || choosingPassword();
+    if (get('signupConsent')) get('signupConsent').required = signingUp();
+    if (get('signupConsentLabel')) get('signupConsentLabel').hidden = !signingUp();
+    get('loginInstruction').textContent = signingUp()
+      ? 'Crea tu cuenta para consultar los registros realizados con tu sesión iniciada. Confirma tu correo para acceder.'
+      : next === 'set-password'
         ? 'Elige tu contraseña. Después podrás entrar sin solicitar enlaces de correo.'
-        : 'Entra con el correo y la contraseña de tu cuenta de Identity Lab.';
+        : memberAccess
+          ? 'Entra para consultar tu registro y tu historial de verificaciones.'
+          : 'Entra con el correo y la contraseña de tu cuenta de Identity Lab.';
     updatePasswordFeedback();
   }
+  if (get('signupToggle'))
+    get('signupToggle').onclick = () => {
+      if (pending) return;
+      get('password').value = '';
+      get('confirmPassword').value = '';
+      setMode('signup');
+      showStatus(
+        'Tu cuenta tendrá acceso únicamente a su información. Los registros anteriores sin cuenta no se vinculan automáticamente.',
+      );
+    };
   get('togglePassword').onclick = () => {
     const show = get('password').type === 'password';
     get('password').type = show ? 'text' : 'password';
@@ -173,7 +202,7 @@
     get('password').value = '';
     get('confirmPassword').value = '';
     setMode('login');
-    showStatus('Recuperación cancelada. Puedes iniciar sesión con tu contraseña actual.');
+    showStatus('Puedes iniciar sesión con tu correo y contraseña.');
   };
   get('recover').onclick = async () => {
     if (pending) return;
@@ -209,19 +238,51 @@
     if (pending) return;
     const current = ++attempt;
     pending = true;
-    setButtonBusy('submit', true, mode === 'set-password' ? 'Guardando…' : 'Entrando…');
+    setButtonBusy(
+      'submit',
+      true,
+      signingUp()
+        ? 'Creando cuenta…'
+        : mode === 'set-password'
+          ? 'Guardando…'
+          : 'Entrando…',
+    );
     showStatus(
       mode === 'set-password' ? 'Guardando tu nueva contraseña…' : 'Validando tu acceso…',
     );
     let passwordSaved = false;
     try {
       let session;
-      if (mode === 'set-password') {
+      if (choosingPassword()) {
         const password = get('password').value;
         if ([...password].length < 15)
           throw new Error('La contraseña debe tener al menos 15 caracteres.');
         if (password !== get('confirmPassword').value)
           throw new Error('Las contraseñas no coinciden.');
+        if (signingUp()) {
+          if (!get('signupConsent').checked)
+            throw new Error('Confirma que deseas crear tu cuenta.');
+          const redirect = new URL('admin-login.html', location.href);
+          const result = await request(
+            '/auth/v1/signup?redirect_to=' + encodeURIComponent(redirect.href),
+            {
+              email: get('email').value.trim(),
+              password,
+            },
+          );
+          get('password').value = '';
+          get('confirmPassword').value = '';
+          if (result.access_token) {
+            await authorize(result, current);
+            return;
+          }
+          setMode('login');
+          showStatus(
+            'Solicitud recibida. Revisa tu correo para confirmar la cuenta. Si ya tienes una, entra con tu contraseña. No necesitas solicitar otro enlace.',
+            'success',
+          );
+          return;
+        }
         await request(
           '/auth/v1/user',
           { password },
@@ -255,12 +316,17 @@
       setButtonBusy(
         'submit',
         false,
-        mode === 'set-password' ? 'Guardar contraseña y entrar' : 'Entrar',
+        signingUp()
+          ? 'Crear mi cuenta'
+          : mode === 'set-password'
+            ? 'Guardar contraseña y entrar'
+            : 'Entrar',
       );
     }
   };
 
   (async () => {
+    if (memberAccess) setMode('login');
     const current = ++attempt;
     if (callback.get('error') || callback.get('error_description')) {
       history.replaceState(null, '', location.pathname);
@@ -274,7 +340,7 @@
       localStorage.removeItem(storageKey);
       sessionStorage.removeItem('identity-lab:qr');
       history.replaceState(null, '', location.pathname);
-      showStatus('Sesión administrativa cerrada.');
+      showStatus('Sesión cerrada.');
       if (session)
         await request('/auth/v1/logout', null, { token: session.access_token }).catch(
           () => {},
