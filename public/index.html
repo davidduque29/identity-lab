@@ -8,35 +8,84 @@
       content="Laboratorio de biometría facial en tu navegador. Registra y compara tu rostro sin AWS."
     />
     <title>Identity Lab · David</title>
-    <link rel="stylesheet" href="style.css?v=6" />
+    <link rel="stylesheet" href="style.css?v=7" />
     <script defer src="vendor/face-api.min.js"></script>
     <script defer src="capture-quality.js?v=5"></script>
-    <link rel="stylesheet" href="portal.css?v=6" />
+    <link rel="stylesheet" href="portal.css?v=7" />
     <script defer src="workflow.js?v=6"></script>
     <script defer src="app.js?v=6"></script>
+    <link rel="stylesheet" href="/interface.css?v=7" />
+    <script defer src="/account.js?v=7"></script>
   </head>
   <body>
     <header>
       <a class="brand" href="/portal.html"
         ><span class="logo">◈</span> identity<span>lab</span></a
       ><span class="badge">LABORATORIO PERSONAL</span>
-      <div class="local"><i></i> Procesamiento en este dispositivo</div>
+      <details class="account-menu" id="accountMenu">
+        <summary aria-label="Abrir opciones de mi cuenta">
+          <span class="account-avatar" id="headerAvatar"
+            ><svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="8" r="3.5" />
+              <path d="M5 21v-2a7 7 0 0 1 14 0v2" /></svg></span
+          ><span class="account-button-label">Mi cuenta</span
+          ><span class="account-chevron" aria-hidden="true">⌄</span>
+        </summary>
+        <div class="account-popover">
+          <div class="account-identity">
+            <strong id="accountLabel">Tu cuenta</strong
+            ><small id="accountRole">Consultando permisos…</small>
+          </div>
+          <a class="account-item" href="/portal.html">Inicio y sesiones QR</a
+          ><a
+            id="accountAdminLink"
+            class="account-item"
+            href="/portal.html#administracion"
+            hidden
+            >Panel administrativo</a
+          >
+          <a
+            class="account-item"
+            href="/portal.html#perfil"
+            id="accountProfileLink"
+            hidden
+            >Mi perfil y avatar</a
+          >
+          <div class="account-separator"></div>
+          <a
+            class="account-item"
+            id="accountSignIn"
+            href="/signin-with-chatgpt?return_to=%2Fportal.html"
+            >Iniciar sesión</a
+          >
+          <a
+            class="account-item"
+            id="accountSignOut"
+            href="/signout-with-chatgpt?return_to=%2Fportal.html"
+            hidden
+            >Cerrar sesión</a
+          >
+        </div>
+      </details>
     </header>
     <main>
-      <section class="intro">
-        <div>
-          <p class="eyebrow">IDENTIDAD DIGITAL / EXPERIMENTO 01</p>
-          <h1>Tu rostro.<br /><span>Tu siguiente proyecto.</span></h1>
-          <p class="lead">
-            Explora cómo una aplicación registra y compara tu rostro.<br />Una cámara, un
-            modelo y todo el proceso a la vista.
-          </p>
+      <section class="intro recognition-banner">
+        <div class="banner-copy">
+          <p class="eyebrow">IDENTITY LAB / RECONOCIMIENTO FACIAL</p>
+          <h1>Tu identidad,<br /><span>a la vista.</span></h1>
+          <p class="lead">Alinea tu rostro, captura y compara. Cada paso, a la vista.</p>
+          <div class="banner-tags">
+            <span>Captura guiada</span><span>Registro y cotejo</span
+            ><span>Demo experimental</span>
+          </div>
         </div>
-        <div class="intro-note">
-          <span>01 / 03</span>
-          <p>Captura → Registro → Comparación</p>
-          <small>Demo funcional · sin cuenta de AWS</small>
-        </div>
+        <img
+          class="banner-image"
+          src="/images/face-recognition.svg"
+          width="560"
+          height="340"
+          alt="Ilustración de un rostro con puntos de referencia y un marco de escaneo facial"
+        />
       </section>
       <div class="workspace">
         <section class="camera-card">
@@ -46,6 +95,30 @@
               <h2>Frente a la cámara</h2>
             </div>
             <span id="cameraStatus" class="chip">Cámara apagada</span>
+          </div>
+          <div class="camera-toolbar">
+            <div class="camera-consent">
+              <label class="consent"
+                ><input id="consent" type="checkbox" /> Autorizo usar mi rostro en esta
+                demo.</label
+              >
+              <details class="consent-detail">
+                <summary>Qué se guarda y cuándo</summary>
+                <p>
+                  En el registro, las tres fotos, los vectores y tus datos se guardan
+                  después de confirmar el formulario y completar las tomas. En el
+                  laboratorio local permanecen solo en memoria. La foto de verificación
+                  persistente se descarta al terminar.
+                </p>
+              </details>
+            </div>
+            <div class="camera-actions">
+              <button id="start" class="primary">Activar cámara <span>↗</span></button
+              ><button id="stop" class="secondary" disabled>Apagar</button>
+            </div>
+            <p id="status" role="status" aria-live="polite">
+              Listo para comenzar. Revisa el consentimiento del flujo elegido.
+            </p>
           </div>
           <div class="viewport">
             <video id="video" autoplay playsinline muted></video
@@ -75,16 +148,18 @@
             <span class="view-label">CÁMARA FRONTAL · CAPTURA LOCAL</span>
           </div>
           <div class="camera-foot">
+            <div class="capture-actions">
+              <button id="captureHere" class="primary" disabled>
+                1. Capturar 3 fotos de referencia</button
+              ><button id="compareHere" class="secondary" disabled>
+                2. Tomar una foto NUEVA y comparar
+              </button>
+            </div>
             <p id="alignmentHint" class="alignment-hint" role="status" aria-live="polite">
               Activa la cámara para evaluar el encuadre.
             </p>
             <p id="captureFeedback" class="capture-feedback" role="status" hidden></p>
-            <label class="consent"
-              ><input id="consent" type="checkbox" /> Acepto capturar mi rostro para esta
-              demo. En el flujo de registro, las fotos, los vectores y mis datos se
-              guardan tras confirmar el formulario. En el laboratorio local permanecen
-              solo en memoria.</label
-            >
+
             <section class="capture-evidence" aria-labelledby="captureEvidenceTitle">
               <h3 id="captureEvidenceTitle">Confirmación de las tomas</h3>
               <ol id="captureProgress" class="capture-progress">
@@ -99,35 +174,24 @@
                 Repetir el registro completo
               </button>
             </section>
-            <section class="network-panel">
-              <h3>Contexto de conexión</h3>
-              <label
-                ><input id="includeNetwork" type="checkbox" checked /> Incluir la IP
-                pública observada en cada captura</label
-              >
-              <p id="networkStatus" role="status">
-                La IP se consultará al tomar la foto, sin enviar su imagen.
-              </p>
-              <p class="muted">
-                En el registro persistente se incluye en la bitácora. Una VPN o red
-                compartida puede cambiar esta información. No demuestra identidad ni
-                ubicación.
-              </p>
-            </section>
-            <div class="capture-actions">
-              <button id="captureHere" class="primary" disabled>
-                1. Capturar 3 fotos de referencia</button
-              ><button id="compareHere" class="secondary" disabled>
-                2. Tomar una foto NUEVA y comparar
-              </button>
-            </div>
-            <div class="camera-actions">
-              <button id="start" class="primary">Activar cámara <span>↗</span></button
-              ><button id="stop" class="secondary" disabled>Apagar</button>
-            </div>
-            <p id="status" role="status" aria-live="polite">
-              Listo para comenzar. Revisa el consentimiento del flujo elegido.
-            </p>
+            <details class="connection-details">
+              <summary>Detalles de la conexión e IP</summary>
+              <section class="network-panel">
+                <h3>Contexto de conexión</h3>
+                <label
+                  ><input id="includeNetwork" type="checkbox" checked /> Incluir la IP
+                  pública observada en cada captura</label
+                >
+                <p id="networkStatus" role="status">
+                  La IP se consultará al tomar la foto, sin enviar su imagen.
+                </p>
+                <p class="muted">
+                  En el registro persistente se incluye en la bitácora. Una VPN o red
+                  compartida puede cambiar esta información. No demuestra identidad ni
+                  ubicación.
+                </p>
+              </section>
+            </details>
           </div>
         </section>
         <aside>

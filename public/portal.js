@@ -272,10 +272,12 @@ async function refreshAdmin() {
 byId('registerQr').onclick = () => createQr('register');
 byId('verifyQr').onclick = () => createQr('verify');
 byId('adminToggle').onclick = async () => {
-  byId('adminArea').hidden = !byId('adminArea').hidden;
+  byId('adminArea').hidden = false;
   if (!byId('adminArea').hidden) {
     await refreshAdmin();
-    byId('adminArea').scrollIntoView({ behavior: 'smooth' });
+    byId(location.hash === '#perfil' ? 'adminProfile' : 'adminArea').scrollIntoView({
+      behavior: 'smooth',
+    });
   }
 };
 byId('refreshAdmin').onclick = refreshAdmin;
@@ -340,6 +342,14 @@ byId('purgeEvents').onclick = async () => {
     byId('userArea').hidden = false;
     byId('adminToggle').hidden = !context.admin;
     message('Sesión autorizada. Elige registrar o verificar.');
+    if (context.admin && ['#administracion', '#perfil'].includes(location.hash)) {
+      byId('adminArea').hidden = false;
+      await refreshAdmin();
+      byId(location.hash === '#perfil' ? 'adminProfile' : 'adminArea').scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    }
     if (context.admin) {
       renderAvatar(context.avatar);
       for (const [k, v] of Object.entries(context.rules)) {
@@ -353,3 +363,13 @@ byId('purgeEvents').onclick = async () => {
   }
 })();
 window.addEventListener('pagehide', () => clearTimeout(pollTimer));
+
+window.addEventListener('hashchange', async () => {
+  if (context?.admin && ['#administracion', '#perfil'].includes(location.hash)) {
+    byId('adminArea').hidden = false;
+    await refreshAdmin();
+    byId(location.hash === '#perfil' ? 'adminProfile' : 'adminArea').scrollIntoView({
+      behavior: 'smooth',
+    });
+  }
+});
