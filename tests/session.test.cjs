@@ -160,7 +160,7 @@ test('green readiness needs stable observations and updates guidance above the f
   assert.equal(nodes.get('captureHere').disabled, true);
   await scheduled.shift()();
   assert.equal(nodes.get('captureHere').disabled, false);
-  assert.match(nodes.get('alignmentHint').textContent, /Ya puedes/);
+  assert.match(nodes.get('alignmentHint').textContent, /Encuadre adecuado/);
   assert.equal(
     nodes.get('alignmentHint').textContent,
     nodes.get('cameraPrompt').textContent,
@@ -291,7 +291,8 @@ test('default entry initializes the full workflow without randomUUID and opens t
     capturedAt: new Date('2026-11-03T00:00:00Z'),
   };
   await context.window.IdentityWorkflow.save([reference]);
-  assert.equal(get('compareHere').hidden, false);
+  assert.equal(get('comparisonAction').hidden, false);
+  assert.equal(get('armComparison').disabled, false);
   assert.equal(context.window.IdentityWorkflow.canCompare(), true);
   assert.equal(get('referenceProofImage').src, reference.image);
   await context.window.IdentityWorkflow.prepareVerification();
@@ -309,6 +310,153 @@ test('default entry initializes the full workflow without randomUUID and opens t
   await get('repeatComparison').onclick();
   assert.equal(get('comparisonProofImage').src, '');
   assert.equal(get('comparisonProofImage').hidden, true);
-  assert.equal(get('compareHere').hidden, false);
+  assert.equal(get('comparisonAction').hidden, false);
+  assert.equal(get('armComparison').disabled, false);
   assert.equal(context.window.IdentityWorkflow.canCompare(), true);
+});
+
+test('stable alignment automatically warns, counts down and captures exactly one registration photo', async () => {
+  const { context, nodes } = createHarness(),
+    scheduled = [],
+    delays = [];
+  context.setTimeout = (fn, ms) => {
+    if (ms === 0 || ms === 350) scheduled.push(fn);
+    else {
+      delays.push(ms);
+      fn();
+    }
+    return scheduled.length;
+  };
+  context.clearTimeout = () => {};
+  await vm.runInContext(
+    `(async()=>{
+    await adapter.load();stream={getTracks:()=>[{stop(){}}]};
+    globalThis.count=0;globalThis.saved=0;globalThis.formAt=0;
+    window.IdentityWorkflow={mode:'register',ready:()=>true,canCompare:()=>saved>0,async afterFirstSample(){formAt=count;},async save(samples){saved=samples.length;},onError(){},reset(){}};
+    adapter.assess=async()=>({ready:true,box:{x:.3,y:.25,width:.4,height:.5}});
+    adapter.capture=async()=>{count++;return {descriptor:new Float32Array(128),image:'one',capturedAt:new Date(),box:{x:.3,y:.25,width:.4,height:.5}};};
+    autoCaptureMode='reference';resumeMonitor();
+  })()`,
+    context,
+  );
+  for (let i = 0; i < 3; i++) await scheduled.shift()();
+  assert.equal(context.count, 1);
+  assert.equal(context.formAt, 1);
+  assert.equal(context.saved, 1);
+  assert.deepEqual(delays, [800, 1000, 1000, 1000]);
+  assert.equal(nodes.get('countdown').hidden, true);
+  assert.match(nodes.get('status').textContent, /segunda foto/);
+  assert.equal(
+    nodes.get('armComparison').disabled,
+    false,
+    'second-photo CTA must be enabled after automatic capture finishes',
+  );
+});
+
+test('movement cancels the automatic countdown and realignment retries without taking extra photos', async () => {
+  const { context, nodes } = createHarness(),
+    scheduled = [];
+  context.setTimeout = (fn, ms) => {
+    if (ms === 0 || ms === 350) scheduled.push(fn);
+    else fn();
+    return scheduled.length;
+  };
+  context.clearTimeout = () => {};
+  await vm.runInContext(
+    `(async()=>{
+    await adapter.load();stream={getTracks:()=>[]};globalThis.count=0;globalThis.assessments=0;
+    window.IdentityWorkflow={mode:'register',ready:()=>true,canCompare:()=>false,async afterFirstSample(){},async save(){},onError(){},reset(){}};
+    adapter.assess=async()=>{assessments++;return assessments===4?{ready:true,box:{x:.35,y:.25,width:.4,height:.5}}:{ready:true,box:{x:.3,y:.25,width:.4,height:.5}};};
+    adapter.capture=async()=>{count++;return {descriptor:new Float32Array(128),image:'single',capturedAt:new Date(),box:{x:.3,y:.25,width:.4,height:.5}};};
+    autoCaptureMode='reference';resumeMonitor();
+  })()`,
+    context,
+  );
+  for (let i = 0; i < 3; i++) await scheduled.shift()();
+  assert.equal(context.count, 0, 'cancelled countdown must never take a photo');
+  assert.match(nodes.get('status').textContent, /cancelada/);
+  for (let i = 0; i < 3; i++) await scheduled.shift()();
+  assert.equal(context.count, 1, 'realignment restarts automatically and captures once');
+});
+
+test('automatic capture never takes a second registration after the data form is cancelled', async () => {
+  const { context } = createHarness(),
+    scheduled = [];
+  context.setTimeout = (fn, ms) => {
+    if (ms === 0 || ms === 350) scheduled.push(fn);
+    else fn();
+    return scheduled.length;
+  };
+  context.clearTimeout = () => {};
+  await vm.runInContext(
+    `(async()=>{
+    await adapter.load();stream={getTracks:()=>[]};globalThis.count=0;
+    window.IdentityWorkflow={mode:'register',ready:()=>true,canCompare:()=>false,async afterFirstSample(){throw new Error('Cancelado');},async save(){throw new Error('must not save');},onError(){},reset(){}};
+    adapter.assess=async()=>({ready:true,box:{x:.3,y:.25,width:.4,height:.5}});
+    adapter.capture=async()=>{count++;return {descriptor:new Float32Array(128),image:'single',capturedAt:new Date(),box:{x:.3,y:.25,width:.4,height:.5}};};
+    autoCaptureMode='reference';resumeMonitor();
+  })()`,
+    context,
+  );
+  for (let i = 0; i < 8; i++) await scheduled.shift()();
+  assert.equal(context.count, 1);
+});
+
+test('the armed comparison automatically captures one new photo and stops instead of looping', async () => {
+  const { context, nodes } = createHarness(),
+    scheduled = [];
+  context.setTimeout = (fn, ms) => {
+    if (ms === 0 || ms === 350) scheduled.push(fn);
+    else fn();
+    return scheduled.length;
+  };
+  context.clearTimeout = () => {};
+  await vm.runInContext(
+    `(async()=>{
+    await adapter.load();stream={getTracks:()=>[]};globalThis.count=0;globalThis.sent=0;globalThis.done=false;
+    references=[{descriptor:new Float32Array(128),image:'first',capturedAt:new Date(),box:{x:.3,y:.25,width:.4,height:.5}}];
+    window.IdentityWorkflow={mode:'verify',ready:()=>!done,canCompare:()=>!done,completed:()=>done,async prepareVerification(){},async verify(s){if(s.image==='second')sent++;done=true;return {match:true,similarity:90,remaining:3};},onError(){},reset(){}};
+    adapter.assess=async()=>({ready:true,box:{x:.3,y:.25,width:.4,height:.5}});
+    adapter.capture=async()=>{count++;return {descriptor:new Float32Array(128).fill(.01),image:'second',capturedAt:new Date(),box:{x:.3,y:.25,width:.4,height:.5}};};
+    autoCaptureMode='comparison';resumeMonitor();
+  })()`,
+    context,
+  );
+  for (let i = 0; i < 3; i++) await scheduled.shift()();
+  assert.equal(context.count, 1);
+  assert.equal(context.sent, 1);
+  assert.equal(nodes.get('cameraStatus').textContent, 'Cámara apagada');
+  assert.match(nodes.get('captureStage').textContent, /FINALIZADA/);
+  assert.equal(
+    scheduled.length,
+    0,
+    'completed verification must not schedule another photo',
+  );
+});
+
+test('turning off the camera during the automatic warning prevents the photo', async () => {
+  const { context } = createHarness(),
+    scheduled = [];
+  context.setTimeout = (fn, ms) => {
+    if (ms === 0 || ms === 350) scheduled.push(fn);
+    else {
+      if (ms === 800) vm.runInContext('stop()', context);
+      fn();
+    }
+    return scheduled.length;
+  };
+  context.clearTimeout = () => {};
+  await vm.runInContext(
+    `(async()=>{
+    await adapter.load();stream={getTracks:()=>[]};globalThis.count=0;
+    window.IdentityWorkflow={mode:'register',ready:()=>true,canCompare:()=>false,onError(){},reset(){}};
+    adapter.assess=async()=>({ready:true,box:{x:.3,y:.25,width:.4,height:.5}});
+    adapter.capture=async()=>{count++;throw new Error('must not capture');};
+    autoCaptureMode='reference';resumeMonitor();
+  })()`,
+    context,
+  );
+  for (let i = 0; i < 3; i++) await scheduled.shift()();
+  assert.equal(context.count, 0);
+  assert.equal(scheduled.length, 0);
 });

@@ -16,6 +16,8 @@ let captureReady = false,
   stableFrames = 0,
   lastAssessmentAt = 0,
   lastBox = null;
+let autoCaptureMode = null,
+  autoCapturePending = false;
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Serialize inference so live guidance never overlaps a capture.
@@ -235,7 +237,8 @@ function updateStage() {
     return;
   }
   const hasReference = window.IdentityWorkflow
-    ? window.IdentityWorkflow.mode === 'verify'
+    ? window.IdentityWorkflow.mode === 'verify' ||
+      !!window.IdentityWorkflow.canCompare?.()
     : !!references.length;
   $('captureStage').textContent = hasReference
     ? 'PASO 2 · FOTO NUEVA DE COMPARACIÓN'
@@ -248,6 +251,33 @@ function pauseMonitor() {
   clearTimeout(monitorTimer);
   monitorTimer = null;
 }
+function boxMoved(a, b) {
+  return !!(
+    a &&
+    b &&
+    (Math.abs(a.x - b.x) > 0.035 ||
+      Math.abs(a.y - b.y) > 0.035 ||
+      Math.abs(a.width - b.width) > 0.04)
+  );
+}
+async function triggerAutomaticCapture() {
+  if (
+    !autoCaptureMode ||
+    autoCapturePending ||
+    busy ||
+    !captureReady ||
+    !window.IdentityWorkflow?.ready()
+  )
+    return;
+  autoCapturePending = true;
+  try {
+    if (autoCaptureMode === 'reference') await enroll();
+    else await verifyPersistent();
+  } finally {
+    autoCapturePending = false;
+    controls();
+  }
+}
 function resumeMonitor() {
   pauseMonitor();
   if (!stream || busy) return;
@@ -259,25 +289,23 @@ function resumeMonitor() {
       const assessment = await adapter.assess();
       if (token !== generation || epoch !== monitorEpoch || !stream || busy) return;
       const b = assessment.box;
-      const moved =
-        b &&
-        lastBox &&
-        (Math.abs(b.x - lastBox.x) > 0.035 ||
-          Math.abs(b.y - lastBox.y) > 0.035 ||
-          Math.abs(b.width - lastBox.width) > 0.04);
+      const moved = boxMoved(b, lastBox);
       stableFrames = assessment.ready && !moved ? stableFrames + 1 : 0;
       lastBox = b ? { ...b } : null;
       lastAssessmentAt = Date.now();
       captureReady = assessment.ready && stableFrames >= 3;
       setGuidance(
         captureReady
-          ? 'Encuadre adecuado. Ya puedes pulsar el botón de captura.'
+          ? autoCaptureMode
+            ? 'No te muevas. La foto se tomará automáticamente.'
+            : 'Encuadre adecuado. Selecciona el siguiente paso para continuar.'
           : assessment.ready
             ? 'Bien colocado. Mantente quieto un momento…'
             : assessment.message,
         captureReady ? 'ready' : 'waiting',
       );
       controls();
+      if (captureReady && autoCaptureMode) await triggerAutomaticCapture();
     } catch (e) {
       if (token !== generation || epoch !== monitorEpoch || busy) return;
       captureReady = false;
@@ -304,13 +332,24 @@ async function prepareCapture(kind, token) {
     kind === 'reference'
       ? 'PASO 1 · PREPARANDO UNA REFERENCIA'
       : 'PASO 2 · PREPARANDO UNA FOTO NUEVA';
+  const anchor = lastBox ? { ...lastBox } : null;
   try {
+    setGuidance(
+      'No te muevas. La ' +
+        (kind === 'reference' ? 'FOTO 1 de registro' : 'FOTO 2 de comparación') +
+        ' se tomará automáticamente.',
+      'capturing',
+    );
+    status('No te muevas: enseguida comienza la cuenta regresiva.');
+    await wait(800);
+    if (token !== generation) return false;
     for (let number = 3; number >= 1; number--) {
       const assessment = await adapter.assess();
       if (token !== generation) return false;
-      if (!assessment.ready)
+      if (!assessment.ready || boxMoved(anchor, assessment.box))
         throw new Error(
-          assessment.message + ' Cuenta regresiva cancelada; vuelve a intentarlo.',
+          (assessment.ready ? 'Detecté movimiento.' : assessment.message) +
+            ' Cuenta regresiva cancelada. Vuelve a centrarte y se reiniciará automáticamente.',
         );
       $('countdown').hidden = false;
       $('countdown').textContent = String(number);
@@ -625,12 +664,21 @@ function controls() {
     ? 'Captura en curso…'
     : references.length
       ? '1. Actualizar mi referencia'
-      : '1. Tomar FOTO DE REGISTRO';
+      : 'Foto 1 · captura automática';
   $('captureHere').className = references.length ? 'secondary' : 'primary';
   $('compareHere').className = references.length ? 'primary' : 'secondary';
   $('compareHere').textContent = busy
     ? 'Captura en curso…'
     : '2. Tomar FOTO NUEVA y comparar';
+  $('armComparison').disabled =
+    busy ||
+    autoCapturePending ||
+    !!autoCaptureMode ||
+    !window.IdentityWorkflow?.canCompare?.();
+  $('comparisonActionInstruction').textContent =
+    autoCaptureMode === 'comparison'
+      ? 'Captura automática activada. Céntrate y no te muevas: aparecerá la cuenta regresiva, sin pulsar otro botón.'
+      : 'Tu registro está guardado. Continúa para encender la cámara y tomar automáticamente una foto NUEVA para comparar.';
   if (!busy) updateStage();
 }
 function result(title, body, kind = '', distance) {
@@ -673,8 +721,9 @@ function showUserResult(match, similarity, remaining) {
 function showAttempt(a) {
   showUserResult(a.match, similarityDisplay(a.mean, a.threshold));
 }
-function stop({ completed = false } = {}) {
-  if (busy && !completed)
+function stop({ completed = false, registered = false } = {}) {
+  autoCaptureMode = null;
+  if (busy && !completed && !registered)
     showCaptureProgress(
       ['retry'],
       'Registro o comparación interrumpidos. Repite la operación; el registro previo, si existe, se conserva.',
@@ -689,7 +738,9 @@ function stop({ completed = false } = {}) {
   setGuidance(
     completed
       ? 'Comparación finalizada. Revisa las dos fotos y el resultado.'
-      : 'Activa la cámara para evaluar el encuadre.',
+      : registered
+        ? 'FOTO 1 guardada. Continúa con la segunda foto desde el botón de arriba.'
+        : 'Activa la cámara para evaluar el encuadre.',
     completed ? 'complete' : 'waiting',
   );
   if (stream) {
@@ -700,16 +751,21 @@ function stop({ completed = false } = {}) {
   $('empty').style.display = 'flex';
   $('emptyTitle').textContent = completed
     ? 'Comparación finalizada'
-    : 'El primer paso eres tú';
+    : registered
+      ? 'FOTO 1 guardada'
+      : 'El primer paso eres tú';
   $('emptyMessage').textContent = completed
     ? 'Se tomó una foto nueva para compararla con el registro. Revisa las dos capturas y el resultado.'
-    : 'Activa la cámara y ubica tu rostro en el centro, con buena iluminación.';
+    : registered
+      ? 'Falta la FOTO 2 para comparar. Pulsa «Continuar con la segunda foto», encima de esta cámara.'
+      : 'Activa la cámara y ubica tu rostro en el centro, con buena iluminación.';
   $('emptyIcon').textContent = completed ? '✓' : '◎';
   $('cameraStatus').textContent = 'Cámara apagada';
   busy = false;
   controls();
 }
 async function start() {
+  if (busy || stream) return;
   if (!$('consent').checked) {
     status('Marca la autorización antes de activar la cámara.');
     $('consent').focus();
@@ -721,11 +777,18 @@ async function start() {
     );
     return;
   }
+  if (!window.IdentityWorkflow?.ready()) {
+    status('Completa primero el paso indicado arriba.');
+    return;
+  }
   busy = true;
+  autoCaptureMode = null;
   controls();
   status('Solicitando permiso de cámara y cargando los modelos…');
   const token = ++generation;
   try {
+    const comparison = !!window.IdentityWorkflow.canCompare?.();
+    if (comparison) await window.IdentityWorkflow.prepareVerification();
     await adapter.load();
     if (token !== generation) return;
     const incoming = await navigator.mediaDevices.getUserMedia({
@@ -755,7 +818,15 @@ async function start() {
     ellipse.setAttribute('ry', video.videoHeight * 0.31);
     $('empty').style.display = 'none';
     $('cameraStatus').textContent = 'Cámara activa';
-    status('Coloca tu rostro en el óvalo. Espera el contorno verde para capturar.');
+    autoCaptureMode = comparison ? 'comparison' : 'reference';
+    stableFrames = 0;
+    lastBox = null;
+    captureReady = false;
+    status(
+      'Coloca tu rostro en el óvalo. La ' +
+        (comparison ? 'FOTO 2 de comparación' : 'FOTO 1 de registro') +
+        ' se tomará automáticamente cuando estés estable.',
+    );
     log('Cámara activada. Imágenes y vectores se procesan en este navegador.');
   } catch (e) {
     if (token !== generation) return;
@@ -801,6 +872,7 @@ async function enroll() {
   try {
     showCaptureProgress(['taking'], 'Tomando tu única foto de referencia…');
     sample = await adapter.capture();
+    autoCaptureMode = null;
     if (token !== generation) return;
     showCaptureProgress(
       ['taken'],
@@ -825,12 +897,16 @@ async function enroll() {
     renderNetworkContext(sample.network);
     result(
       'Registro completado',
-      'FOTO 1 guardada. Todavía no se ha comparado. Pulsa «2. Tomar FOTO NUEVA y comparar» debajo de la cámara.',
+      'FOTO 1 guardada. Todavía no se ha comparado. Pulsa «Continuar con la segunda foto» encima de la cámara.',
     );
     status(
       'Registro completo. El siguiente paso usa una foto NUEVA para verificar tu rostro.',
     );
     log('Referencia única confirmada.');
+    stop({ registered: true });
+    status(
+      'FOTO 1 guardada. Falta la FOTO 2: pulsa «Continuar con la segunda foto» encima de la cámara.',
+    );
   } catch (e) {
     if (token === generation) {
       window.IdentityWorkflow?.onError(e);
@@ -873,6 +949,7 @@ async function verifyPersistent() {
     await window.IdentityWorkflow.prepareVerification?.();
     if (token !== generation) return;
   } catch (e) {
+    autoCaptureMode = null;
     window.IdentityWorkflow.onError(e);
     status(e.message);
     finishCapture(token);
@@ -884,6 +961,7 @@ async function verifyPersistent() {
   }
   try {
     sample = await adapter.capture();
+    autoCaptureMode = null;
     if (token !== generation) return;
     const response = await window.IdentityWorkflow.verify(
       sample,
@@ -938,16 +1016,51 @@ function reset() {
   controls();
 }
 window.CaptureUI = {
-  prepareNewComparison() {
+  refreshControls: controls,
+  async prepareNewComparison() {
+    if (busy || autoCapturePending || !window.IdentityWorkflow?.canCompare?.()) return;
     result(
-      'Esperando una FOTO NUEVA',
-      'El registro anterior se conserva. La próxima comparación requiere otra captura.',
+      'Esperando la FOTO 2 automática',
+      'Céntrate y no te muevas. El registro anterior se conserva.',
     );
-    start();
+    if (!stream) {
+      await start();
+      return;
+    }
+    const token = generation;
+    busy = true;
+    autoCaptureMode = null;
+    pauseMonitor();
+    controls();
+    try {
+      await window.IdentityWorkflow.prepareVerification();
+      if (token !== generation) return;
+      autoCaptureMode = 'comparison';
+      stableFrames = 0;
+      captureReady = false;
+      lastBox = null;
+      status('FOTO 2 automática preparada. Céntrate; comenzará la cuenta regresiva.');
+    } catch (e) {
+      window.IdentityWorkflow.onError(e);
+      status(e.message);
+    } finally {
+      if (token === generation) {
+        busy = false;
+        controls();
+        resumeMonitor();
+      }
+    }
   },
 };
 $('captureHere').addEventListener('click', enroll);
-$('retryCapture').addEventListener('click', enroll);
+$('retryCapture').addEventListener('click', () => {
+  autoCaptureMode = 'reference';
+  stableFrames = 0;
+  captureReady = false;
+  lastBox = null;
+  resumeMonitor();
+  status('Reintento preparado. Céntrate; la foto se tomará automáticamente.');
+});
 $('compareHere').addEventListener('click', verify);
 $('start').addEventListener('click', start);
 $('stop').addEventListener('click', () => {

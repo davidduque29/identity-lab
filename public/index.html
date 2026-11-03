@@ -12,9 +12,9 @@
     <script defer src="vendor/face-api.min.js"></script>
     <script defer src="capture-quality.js?v=8"></script>
     <link rel="stylesheet" href="portal.css?v=8" />
-    <script defer src="workflow.js?v=9"></script>
-    <script defer src="app.js?v=9"></script>
-    <link rel="stylesheet" href="/interface.css?v=9" />
+    <script defer src="workflow.js?v=10"></script>
+    <script defer src="app.js?v=10"></script>
+    <link rel="stylesheet" href="/interface.css?v=10" />
     <script defer src="/account.js?v=8"></script>
   </head>
   <body>
@@ -89,6 +89,13 @@
       </section>
       <div class="workspace">
         <section class="camera-card">
+          <nav class="capture-mode-switch" aria-label="Registrar o comparar">
+            <a id="captureModeRegister" href="/index.html?flow=register"
+              >1. Registrar mi rostro</a
+            ><a id="captureModeVerify" href="/index.html?flow=verify"
+              >Ya me registré · Comparar</a
+            >
+          </nav>
           <div class="panel-head">
             <div>
               <span class="eyebrow">CAPTURA EN VIVO</span>
@@ -106,9 +113,9 @@
                 <summary>Qué se guarda y cuándo</summary>
                 <p>
                   En el registro, tu foto, la plantilla facial y tus datos se guardan
-                  después de confirmar el formulario y aceptar la toma. En el laboratorio
-                  local permanecen solo en memoria. La foto de verificación persistente se
-                  descarta al terminar.
+                  después de confirmar el formulario y aceptar la toma. La foto de
+                  comparación solo se muestra en esta pestaña; no se guarda en el servidor
+                  y se borra al limpiar, repetir o cerrar.
                 </p>
               </details>
             </div>
@@ -120,6 +127,17 @@
               Listo para comenzar. Revisa el consentimiento del flujo elegido.
             </p>
           </div>
+          <section id="comparisonAction" class="comparison-action" hidden>
+            <span class="eyebrow">SIGUIENTE PASO · FOTO 2</span>
+            <h3>Comparar con una foto NUEVA</h3>
+            <p id="comparisonActionInstruction">
+              Tu registro ya está guardado. Continúa para encender la cámara: al centrarte
+              comenzará el temporizador y se tomará otra foto automáticamente.
+            </p>
+            <button id="armComparison" class="primary" type="button">
+              Continuar con la segunda foto
+            </button>
+          </section>
           <p id="alignmentHint" class="alignment-hint" role="status" aria-live="polite">
             Activa la cámara para evaluar el encuadre.
           </p>
@@ -178,7 +196,7 @@
                 Todavía no se ha guardado ninguna referencia.
               </p>
               <button id="retryCapture" type="button" class="secondary" hidden disabled>
-                Repetir la foto
+                Reintentar captura automática
               </button>
             </section>
             <details class="connection-details">
@@ -218,8 +236,8 @@
                   confirma el registro.
                 </p>
                 <p class="step-instruction">
-                  Espera el contorno verde y pulsa «Tomar mi foto de registro». La foto
-                  aceptada abrirá el formulario.
+                  Cuando estés centrado y estable, te avisaremos «No te muevas» y
+                  aparecerá una cuenta regresiva. La foto aceptada abrirá el formulario.
                 </p>
                 <img
                   id="referencePreview"
@@ -237,13 +255,14 @@
                 <h3>Comprueba la coincidencia</h3>
                 <p>Toma una nueva captura para compararla con tu registro.</p>
                 <p class="step-instruction">
-                  Pulsa «2. Tomar FOTO NUEVA y comparar». Habrá otra cuenta regresiva y
-                  una segunda captura distinta de la foto de registro.
+                  Pulsa «Continuar con la segunda foto», encima de la cámara. La nueva
+                  captura se tomará automáticamente cuando estés estable.
                 </p>
               </div>
             </div>
             <p id="stepStatus" class="step-status" role="status" aria-live="polite">
-              Activa la cámara y espera el contorno verde. Luego pulsa el botón 1.
+              Activa la cámara y céntrate. La foto se tomará automáticamente después de
+              avisarte y contar tres segundos.
             </p>
             <section class="capture-receipt" aria-label="Las dos fotos del proceso">
               <h3>Las dos fotos del proceso</h3>

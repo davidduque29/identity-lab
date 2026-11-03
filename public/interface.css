@@ -674,3 +674,77 @@ aside .step-status {
 .capture-actions > button:not([hidden]) {
   grid-column: 1/-1;
 }
+.capture-mode-switch {
+  display: flex;
+  gap: 8px;
+  margin: 18px 20px 0;
+  padding: 5px;
+  border: 1px solid #d8e3d2;
+  border-radius: 12px;
+  background: #f5f8f1;
+}
+.capture-mode-switch a {
+  flex: 1;
+  padding: 11px 9px;
+  text-align: center;
+  border-radius: 8px;
+  color: #42614a;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 650;
+}
+.capture-mode-switch a[aria-current='step'] {
+  background: #255f49;
+  color: #fff;
+  box-shadow: 0 3px 8px #244c3420;
+}
+.capture-mode-switch a:hover {
+  box-shadow: 0 2px 8px #244c3414;
+}
+.comparison-action {
+  margin: 0 16px 14px;
+  padding: 20px;
+  background: #e9f5dc;
+  border: 2px solid #8ab36b;
+  border-radius: 13px;
+}
+.comparison-action h3 {
+  font-size: 18px;
+  color: #244e31;
+  margin: 6px 0;
+}
+.comparison-action p {
+  font-size: 12px;
+  color: #4c6648;
+  margin: 8px 0 14px;
+}
+.comparison-action #armComparison {
+  width: 100%;
+  min-height: 48px;
+  font-size: 14px;
+  background: #255f49;
+  color: #fff;
+}
+.comparison-action .eyebrow {
+  font-size: 9px;
+  color: #48733d;
+}
+.comparison-action button:disabled {
+  opacity: 0.65;
+}
+@media (max-width: 600px) {
+  .capture-mode-switch {
+    margin: 14px 12px 0;
+  }
+  .capture-mode-switch a {
+    font-size: 11px;
+    padding: 12px 6px;
+  }
+  .comparison-action {
+    margin: 0 10px 12px;
+    padding: 16px;
+  }
+  .comparison-action h3 {
+    font-size: 17px;
+  }
+}

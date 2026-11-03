@@ -47,12 +47,25 @@
   function modeUI() {
     $w('workflowTitle').textContent =
       '1. Foto de registro → 2. Foto NUEVA → 3. Resultado';
-    $w('captureHere').hidden = !!targetId || mode === 'verify';
-    $w('compareHere').hidden = !targetId || completed;
+    $w('captureHere').hidden = true;
+    $w('compareHere').hidden = true;
+    $w('comparisonAction').hidden = !targetId || completed;
+    $w('armComparison').hidden = false;
+    $w('captureModeRegister').setAttribute(
+      'aria-current',
+      targetId || mode === 'verify' ? 'false' : 'step',
+    );
+    $w('captureModeVerify').setAttribute(
+      'aria-current',
+      targetId || mode === 'verify' ? 'step' : 'false',
+    );
     $w('repeatComparison').hidden = !completed;
     $w('registerStep').hidden = false;
     $w('compareStep').hidden = false;
     $w('inspection').hidden = true;
+    $w('armComparison').disabled =
+      !targetId || !initialized || completed || Date.now() < pauseUntil;
+    window.CaptureUI?.refreshControls?.();
   }
   const time = (value) =>
     new Date(value || Date.now()).toLocaleTimeString('es-CO', {
@@ -206,7 +219,7 @@
       window.IdentityWorkflow.mode = mode;
       modeUI();
       notice(
-        'Ahora tomaremos la FOTO 2, una captura NUEVA, y la compararemos con tu registro.',
+        'Paso 2: céntrate en el óvalo. La foto NUEVA se tomará automáticamente y se comparará con tu registro.',
       );
     },
     async afterFirstSample(sample) {
@@ -243,7 +256,7 @@
       notice(
         result.cleanupPending
           ? 'Registro guardado. Hay archivos anteriores pendientes de limpieza; contacta al administrador.'
-          : '✓ FOTO 1 guardada con tus datos. Pulsa «2. Tomar FOTO NUEVA y comparar» debajo de la cámara. Todavía no se ha comparado.',
+          : '✓ FOTO 1 guardada con tus datos. Falta la FOTO 2. Pulsa «Continuar con la segunda foto» encima de la cámara. Todavía no se ha comparado.',
       );
       return result;
     },
@@ -323,6 +336,7 @@
       requestId = newRequestId();
     },
   };
+  $w('armComparison').onclick = () => window.CaptureUI?.prepareNewComparison();
   $w('repeatComparison').onclick = async () => {
     $w('repeatComparison').disabled = true;
     try {
@@ -335,7 +349,7 @@
       window.IdentityWorkflow.mode = mode;
       modeUI();
       notice(
-        'Nueva comparación preparada. Activa la cámara y toma una FOTO NUEVA. El registro no cambia.',
+        'Nueva comparación preparada. Céntrate y no te muevas: la FOTO 2 se tomará automáticamente. El registro no cambia.',
       );
       $w('proofStatus').textContent =
         'La foto anterior de comparación fue borrada. Falta una FOTO 2 nueva.';
@@ -366,8 +380,8 @@
       modeUI();
       notice(
         mode === 'register'
-          ? 'Activa la cámara y toma UNA foto. Al aceptarla se abrirá el formulario de datos.'
-          : 'Registro seleccionado. Activa la cámara y toma una foto nueva.',
+          ? 'Activa la cámara y céntrate. La FOTO 1 se tomará automáticamente y abrirá el formulario de datos.'
+          : 'Registro seleccionado. Pulsa «Continuar con la segunda foto» encima de la cámara. La captura será automática.',
       );
     } catch (e) {
       notice(e.message);

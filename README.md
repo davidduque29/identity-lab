@@ -5,9 +5,9 @@ Demo de registro y cotejo facial con face-api.js 0.22.2. Todas las entradas de c
 ## Flujo de la persona
 
 1. Autoriza la cámara y espera el contorno verde. Las instrucciones se muestran sobre la vista, antes del fotograma, y dentro de él.
-2. Toma **una sola foto**. Cada fotograma se valida por tamaño, posición, pose e iluminación. La guía usa un óvalo más estrecho con coordenadas acordes a la resolución real del video.
+2. La foto se toma **automáticamente** tras tres evaluaciones estables, el aviso «No te muevas», una pausa breve y una cuenta regresiva de tres segundos. El movimiento cancela el temporizador y permite reintentarlo al recuperar el encuadre. Cada fotograma se valida por tamaño, posición, pose e iluminación. La guía usa un óvalo más estrecho con coordenadas acordes a la resolución real del video.
 3. La foto aceptada abre un formulario con miniatura, nombre, segundo nombre opcional, apellidos, nacimiento, documento, dirección y consentimiento. Confirmar los datos guarda la foto y el perfil. Cancelar descarta la foto temporal.
-4. «2. Tomar FOTO NUEVA y comparar», debajo de la cámara, inicia otra cuenta regresiva y una segunda captura distinta en la misma sesión. En otra visita se selecciona el documento desde el flujo de verificación.
+4. Tras guardar, la cámara se apaga y aparece «Continuar con la segunda foto» encima del video. Ese botón enciende y prepara la captura automática de una segunda imagen distinta. La opción permanente «Ya me registré · Comparar» abre la verificación de un registro existente sin volver a registrarse. En otra visita se selecciona el documento desde el flujo de verificación.
 5. El servidor compara el descriptor nuevo con la única referencia. El usuario ve «Tu rostro coincide» o «No se confirmó la coincidencia» y un índice de similitud orientativo del 1 al 100%. Si coincide, aparecen los datos registrados. La captura de comparación solo se muestra en memoria en la pestaña, junto a la referencia y sus horas. Nunca se guarda en el servidor y se elimina al limpiar, repetir o cerrar. Los vectores temporales se ponen a cero tras la operación.
 
 El índice usa `round(100 × exp(-ln(2) × (distancia/umbral)^2))`, limitado a 1–100. El umbral corresponde a 50 antes de redondear. **No es una probabilidad de identidad ni una precisión validada.** El resultado se decide con la distancia completa; el redondeo visual no determina aceptación. Distancia, umbral, fórmula y vectores quedan en la administración. La API de verificación pública omite los datos técnicos, incluso para la cuenta administradora; los endpoints técnicos exigen rol de administrador.
@@ -63,6 +63,10 @@ Las pruebas usan SQLite real y un almacén de objetos de prueba. Cubren registro
 
 ## Evidencia visible y repetición
 
-La pantalla distingue foto 1 de registro, foto 2 nueva y resultado. El botón de la segunda foto ocupa el mismo grupo de controles debajo del video. Al terminar se apaga la cámara, se eliminan las indicaciones de captura activa y aparece «Hacer otra comparación», que requiere una nueva captura y conserva los contadores del servidor.
+La pantalla distingue foto 1 de registro, foto 2 nueva y resultado. La tarjeta «Continuar con la segunda foto» aparece encima del video al guardar o seleccionar un registro. La captura posterior es automática al recuperar el encuadre estable. Al terminar se apaga la cámara, se eliminan las indicaciones de captura activa y aparece «Hacer otra comparación», que requiere una nueva captura y conserva los contadores del servidor.
 
 Al verificar un registro existente, la referencia se muestra solo después de una coincidencia mediante un endpoint ligado al actor, intento exitoso, archivo exacto utilizado y vigencia de cinco minutos. Un registro modificado, otra persona o un intento fallido no permiten descargar esa evidencia. Las miniaturas se muestran solo en la sesión actual; no se crea una galería persistente de comparaciones.
+
+## Control de captura automática
+
+El disparo automático es de una sola toma por paso. Solo se arma al activar la cámara para el paso correspondiente o mediante un reintento explícito; no encadena una segunda captura al cerrar el formulario. La aceptación del fotograma desarma el disparador antes de abrir el formulario o enviar una verificación. Cancelar el formulario o fallar el guardado no crea un bucle de nuevas fotos. Apagar, limpiar u ocultar la página cancela el temporizador y el disparador. El análisis en vivo y la inferencia siguen serializados.
