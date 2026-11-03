@@ -17,3 +17,6 @@ next-env.d.ts
 
 .sites-runtime/
 *.tsbuildinfo
+
+pages-dist/
+supabase/functions/identity-api/shared/

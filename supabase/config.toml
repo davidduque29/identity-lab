@@ -1,0 +1,3 @@
+project_id = "hckqcyhsnuwblwjvqpdi"
+[functions.identity-api]
+verify_jwt = false # The function validates Supabase admin JWTs or expiring visitor capabilities itself.

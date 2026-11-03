@@ -83,13 +83,20 @@ export function descriptor(value) {
 }
 export function compare(references, probe, threshold) {
   descriptor(probe);
-  if (!Array.isArray(references) || references.length !== 3)
+  if (!Array.isArray(references) || references.length !== 1)
     throw new ValidationError('Referencia inválida.');
   const distances = references.map((ref) =>
     Math.sqrt(descriptor(ref).reduce((sum, x, i) => sum + (x - probe[i]) ** 2, 0)),
   );
-  const mean = distances.reduce((sum, x) => sum + x, 0) / 3;
-  return { distances, mean, threshold, match: mean <= threshold };
+  const mean = distances.reduce((sum, x) => sum + x, 0) / distances.length;
+  return {
+    distances,
+    mean,
+    threshold,
+    match: mean <= threshold,
+    similarity: similarityIndex(mean, threshold),
+    scoreVersion: 'relative-gaussian-v1',
+  };
 }
 export function nextAttempt(profile, match, rules, now) {
   if (profile.locked_until > now) return { blocked: true, retryAt: profile.locked_until };
@@ -113,4 +120,28 @@ export function rasterData(value, maxBytes = 800000) {
   if (!bytes.length || bytes.length > maxBytes || (match[1] === 'jpeg' ? !jpeg : !png))
     throw new ValidationError('Imagen inválida o demasiado grande.');
   return { bytes, type: 'image/' + match[1] };
+}
+
+// A display index relative to the configured decision threshold, never a probability.
+export function similarityIndex(distance, threshold) {
+  if (
+    !Number.isFinite(distance) ||
+    distance < 0 ||
+    !Number.isFinite(threshold) ||
+    threshold <= 0
+  )
+    throw new ValidationError('Distancia o umbral inválido.');
+  return Math.max(
+    1,
+    Math.min(100, Math.round(100 * Math.exp(-Math.LN2 * (distance / threshold) ** 2))),
+  );
+}
+export function publicVerification(result, remaining, retryAt, profile) {
+  return {
+    match: result.match,
+    similarity: result.similarity ?? similarityIndex(result.mean, result.threshold),
+    remaining,
+    retryAt,
+    profile: result.match ? profile : null,
+  };
 }

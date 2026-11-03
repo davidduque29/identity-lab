@@ -29,6 +29,7 @@ export class DriveStorage {
   }
 }
 export function storageFor(env) {
+  if (env.STORAGE) return env.STORAGE;
   if (!env.BUCKET) throw new Error('Almacenamiento persistente no disponible.');
   return new SitesStorage(env.BUCKET);
 }
