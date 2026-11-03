@@ -1,6 +1,8 @@
 <!doctype html>
 <html lang="es">
   <head>
+    <script src="deployment-config.js"></script>
+    <script defer src="transport.js"></script>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
@@ -8,15 +10,15 @@
       content="Registro y cotejo facial con sesiones QR y administración."
     />
     <title>Identity Lab · Registro y administración</title>
-    <link rel="stylesheet" href="/style.css?v=7" />
-    <link rel="stylesheet" href="/portal.css?v=7" />
-    <script defer src="/portal.js?v=7"></script>
-    <link rel="stylesheet" href="/interface.css?v=7" />
-    <script defer src="/account.js?v=7"></script>
+    <link rel="stylesheet" href="style.css?v=8" />
+    <link rel="stylesheet" href="portal.css?v=8" />
+    <script defer src="portal.js?v=8"></script>
+    <link rel="stylesheet" href="interface.css?v=8" />
+    <script defer src="account.js?v=8"></script>
   </head>
   <body>
     <header>
-      <a class="brand" href="/portal.html"
+      <a class="brand" href="portal.html"
         ><span class="logo">◈</span> identity<span>lab</span></a
       ><span class="badge">REGISTRO Y COTEJO FACIAL</span>
       <details class="account-menu" id="accountMenu">
@@ -33,29 +35,18 @@
             <strong id="accountLabel">Tu cuenta</strong
             ><small id="accountRole">Consultando permisos…</small>
           </div>
-          <a class="account-item" href="/portal.html">Inicio y sesiones QR</a
+          <a class="account-item" href="portal.html">Inicio y sesiones QR</a
           ><button id="adminToggle" class="account-item" hidden>
             Panel administrativo
           </button>
-          <a
-            class="account-item"
-            href="/portal.html#perfil"
-            id="accountProfileLink"
-            hidden
+          <a class="account-item" href="portal.html#perfil" id="accountProfileLink" hidden
             >Mi perfil y avatar</a
           >
           <div class="account-separator"></div>
-          <a
-            class="account-item"
-            id="accountSignIn"
-            href="/signin-with-chatgpt?return_to=%2Fportal.html"
+          <a class="account-item" id="accountSignIn" href="admin-login.html"
             >Iniciar sesión</a
           >
-          <a
-            class="account-item"
-            id="accountSignOut"
-            href="/signout-with-chatgpt?return_to=%2Fportal.html"
-            hidden
+          <a class="account-item" id="accountSignOut" href="admin-login.html#salir" hidden
             >Cerrar sesión</a
           >
         </div>
@@ -76,7 +67,7 @@
         </div>
         <img
           class="banner-image"
-          src="/images/face-recognition.svg"
+          src="images/face-recognition.svg"
           width="560"
           height="340"
           alt="Ilustración de un rostro con puntos de referencia y un marco de escaneo facial"
@@ -85,24 +76,20 @@
       <p id="portalStatus" class="step-status" role="status" aria-live="polite">
         Comprobando acceso…
       </p>
-      <a
-        id="signIn"
-        class="primary link-button"
-        href="/signin-with-chatgpt?return_to=%2Fportal.html"
-        hidden
-        >Iniciar sesión con ChatGPT</a
+      <a id="signIn" class="primary link-button" href="admin-login.html" hidden
+        >Iniciar sesión con la administración</a
       >
       <section id="userArea" class="portal-grid" hidden>
         <article class="panel action-panel">
           <p class="eyebrow">PRIMERA VEZ</p>
           <h2>Registrar mi rostro</h2>
           <p>
-            Una primera foto aceptada abre el formulario. Después completamos las otras
-            dos referencias y guardamos el registro.
+            Una primera foto aceptada abre el formulario. Al confirmar tus datos guardamos
+            esa única foto y tu perfil.
           </p>
           <div class="button-row">
             <button id="registerQr" class="primary">Continuar con QR</button
-            ><a class="secondary link-button" href="/index.html?flow=register"
+            ><a class="secondary link-button" href="index.html?flow=register"
               >Usar este equipo</a
             >
           </div>
@@ -116,7 +103,7 @@
           </p>
           <div class="button-row">
             <button id="verifyQr" class="primary">Verificar con QR</button
-            ><a class="secondary link-button" href="/index.html?flow=verify"
+            ><a class="secondary link-button" href="index.html?flow=verify"
               >Usar este equipo</a
             >
           </div>
@@ -138,7 +125,7 @@
         <div id="qrImage" aria-label="Código QR de la sesión"></div>
       </section>
       <section class="panel storage-note">
-        <strong>Destino actual: almacenamiento privado de Sites.</strong>
+        <strong>Destino actual: Supabase: base de datos y fotos privadas.</strong>
         <p>
           Datos estructurados en base de datos y fotos en almacenamiento de archivos. El
           adaptador de Drive está pendiente de habilitación; todavía no se guarda en
@@ -283,8 +270,8 @@
                 <tr>
                   <th>Fecha</th>
                   <th>Acción / persona</th>
-                  <th>Resultado</th>
-                  <th>IP</th>
+                  <th>Resultado y cálculo técnico</th>
+                  <th>IP pública (IPv4 / IPv6)</th>
                   <th>Regla / motivo</th>
                 </tr>
               </thead>
@@ -300,7 +287,7 @@
       </dialog>
       <footer>
         <span>identitylab / Construido para aprender, David.</span
-        ><a href="/index.html">Abrir laboratorio local</a>
+        ><a href="index.html">Registrar en este equipo</a>
       </footer>
     </main>
   </body>

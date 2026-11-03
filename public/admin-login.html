@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Administración · Identity Lab</title>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="portal.css" />
+    <script src="deployment-config.js"></script>
+    <script defer src="admin-login.js"></script>
+  </head>
+  <body>
+    <main class="shell">
+      <section class="panel profile-form">
+        <h1>Acceso administrativo</h1>
+        <p>
+          Los visitantes usan la cámara sin cuenta de ChatGPT. Este acceso es solo para
+          administrar el laboratorio.
+        </p>
+        <form id="login">
+          <label
+            >Correo administrativo<input
+              id="email"
+              type="email"
+              required
+              autocomplete="email" /></label
+          ><label id="codeLabel" hidden
+            >Código del correo<input
+              id="code"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              maxlength="12" /></label
+          ><button class="primary" id="submit">Enviar código</button>
+        </form>
+        <p id="status" role="status"></p>
+        <a href="portal.html">Volver al laboratorio</a>
+      </section>
+    </main>
+  </body>
+</html>

@@ -1,70 +1,62 @@
 # Identity Lab
 
-Laboratorio de captura y cotejo facial con face-api.js 0.22.2. El inicio es `/portal.html`; `/index.html` conserva el experimento local y `?flow=register` / `?flow=verify` activan el flujo persistente.
+Demo pública de registro y comparación facial: GitHub Pages + GitHub Actions + Supabase.
+
+URL de despliegue: https://davidduque29.github.io/identity-lab/
 
 ## Flujo
 
-1. Una cuenta autorizada abre el portal y genera un QR de registro o verificación, o usa el mismo equipo.
-2. El QR contiene un token aleatorio en el fragmento del enlace, caduca y se reclama una sola vez. El servidor almacena su hash. El celular debe tener acceso al Site; el QR no cambia permisos de Sites.
-3. La primera referencia aceptada abre el formulario de datos y consentimiento. Después se toman las otras dos fotos, con encuadre validado. El guardado se confirma únicamente al completar las tres muestras y la escritura persistente.
-4. Tipo y número de documento normalizados producen una clave única por cliente. Reintentos con el mismo identificador no crean otro registro.
-5. La verificación selecciona un registro accesible a la cuenta, toma una foto nueva y envía solo su descriptor. El servidor calcula la media de las distancias contra las tres referencias y decide con su propia configuración. La foto temporal se descarta, incluso si ocurre un error.
-6. Una coincidencia muestra los datos en el celular o equipo donde se capturó. El computador que generó el QR solo recibe el estado; no recibe fotos ni datos personales por el canal de seguimiento.
+1. Abre la cámara y centra el rostro. Tras estabilidad, se muestra «No te muevas», cuenta 3–2–1 y toma **una** foto.
+2. Completa y confirma los datos. El servidor impide duplicados por tipo y número de documento normalizado. Si ya existe, ofrece «Usar mi registro y comparar» y no guarda otra foto.
+3. Pulsa «Continuar con la segunda foto». Hace una captura nueva automática y compara su descriptor con la referencia.
+4. Muestra ambas miniaturas, un índice de similitud orientativo y, solo si coincide, los datos registrados. La cámara se apaga.
 
-## Persistencia y adaptadores
+Al regresar con la misma sesión de visitante, detecta un registro previo y ofrece comparar directamente. Desde otro navegador se busca por documento. No identifica duplicados por parecido facial: distintos documentos podrían registrar el mismo rostro.
 
-- D1: perfiles, consentimiento, plantillas versionadas, sesiones QR, reglas, contadores y auditoría.
-- R2: tres referencias por registro y la foto administrativa opcional, en rutas privadas con ID interno. No hay un endpoint público de fotos.
-- `server/storage.mjs`: puerto de archivos con adaptador funcional de Sites. `DriveStorage` informa explícitamente que falta habilitación; **no está conectado ni guarda en Drive**. El selector directo de avatar desde Drive tampoco está disponible; se puede descargar una imagen de Drive y subirla desde el equipo.
-- `server/domain.mjs`: validación, modelo/versionado, comparación y reglas independientes de HTTP y almacenamiento.
-- `server/lab.mjs`: servicio HTTP, autorización, operaciones SQL atómicas y orquestación.
-- `public/app.js`: adaptador del motor facial, encuadre y captura. `public/workflow.js`: formulario e integración del flujo persistente. `public/portal.js`: QR y administración.
+El QR apunta a `portal.html#qr=<token aleatorio>`, vence, se reclama una sola vez y funciona sin ChatGPT. El token se retira de la barra y pasa a la memoria de sesión del navegador. El equipo que lo genera recibe estado, no los datos de la persona.
 
-Los archivos se guardan mediante el puerto de almacenamiento; los contadores y las sesiones requieren persistencia transaccional. Cambiar el almacenamiento de archivos no migra los perfiles ni la base de datos operativa. Un destino nuevo requiere su implementación, permisos y migración; no basta con cambiar una etiqueta. Los datos y reglas están aislados por cliente en el esquema; esta publicación configura un único cliente. No incluye alta o gestión de múltiples clientes.
+## Arquitectura y adaptadores
 
-## Reglas y administración
+- `public/`: interfaz estática; `transport.js` encapsula API, sesión y carga autorizada de imágenes; `deployment-config.js` contiene URL y **clave publicable**, nunca un secreto.
+- `server/domain.mjs`: validaciones, comparación, contador y reglas sin dependencia del proveedor.
+- `server/lab.mjs`: casos de uso compartidos con puertos `DB` y `STORAGE`.
+- `supabase/functions/identity-api/index.ts`: adaptadores de identidad, base de datos y archivos. La clave de servicio permanece en el entorno de Edge Functions.
+- PostgreSQL: esquema `identity_private`, RLS activado, sin acceso directo de anon/authenticated. RPC invoker de sentencias fijas enumeradas y valores escapados, solo ejecutable por service_role; cada batch es una transacción. No existe un endpoint público para ejecutar SQL.
+- Storage: bucket privado `identity-lab`; una referencia y plantilla por perfil, avatar separado. No se persiste la foto de comparación.
+- Administración: Supabase Auth verifica correo; la dirección autorizada está en configuración privada del servidor, no en metadatos editables del usuario.
+- Visitantes: capacidades aleatorias de 24 horas, guardadas por hash en el servidor. No se necesita una cuenta de ChatGPT.
 
-La variable de servidor `ADMIN_EMAIL` determina la cuenta administrativa; no se acepta un rol enviado por el navegador. Sites conserva además su política de acceso original.
+Los registros de esta demo son compartidos dentro de su único tenant: un visitante puede buscar un documento y comparar. El listado, las plantillas, las fotos administrativas y la edición están restringidos al administrador. **No usar esta demo para autenticar servicios reales:** no hay prueba de vida, comprobación documental ni extracción confiable de la plantilla en el servidor. El descriptor llega del cliente. El índice porcentual no es probabilidad ni exactitud validada.
 
-El panel permite listar perfiles, consultar datos, buscar en la página, ver eventos y sus IP, desbloquear con motivo, autorizar reemplazo de referencias, eliminar perfiles, elegir un avatar o subir una imagen recortada a 256×256. Los controles del servidor deniegan estas acciones a otros visitantes.
+## Datos
 
-Valores iniciales: tres fallos consecutivos, pausa de 15 minutos, QR de cinco minutos, umbral de 0.50 y plazo de eventos de 90 días. Son configurables con límites. Las capturas rechazadas antes de comparar no incrementan fallos. Una coincidencia reinicia el contador. Cambiar reglas no acorta una pausa ya activa. La depuración de eventos vencidos se ejecuta mediante una acción explícita del administrador; no hay tarea automática programada.
+Una referencia JPEG/PNG, 128 valores del descriptor, datos declarados, consentimiento, fecha y auditoría. La foto nueva de comparación solo se muestra en memoria de la pestaña. Las sustituciones de referencia necesitan autorización administrativa. Unicidad del documento y contadores se controlan en el servidor, también con solicitudes concurrentes.
 
-La actualización de referencias exige autorización y reemplaza las tres muestras solo tras confirmar la escritura completa. Una operación fallida conserva las referencias previas. Los objetos nuevos se escriben en una revisión temporal antes de cambiar el puntero del registro: durante el reemplazo pueden coexistir temporalmente seis archivos. Si falla la limpieza posterior, el servidor devuelve `cleanupPending`; no hay reconciliador automático aún. El cliente informa esta situación al administrador. El registro activo mantiene tres referencias. La eliminación borra perfil, plantillas y fotos; conserva eventos sin nombre ni documento, solo ID interno y contexto de acceso, hasta su depuración.
+La captura de IP **está pendiente de verificar en el nuevo gateway**. Se devuelve «no disponible» y no se confía en una cabecera X-Forwarded-For enviada por el cliente. No se presenta una IP inventada ni heredada de Sites.
 
-## Límites de seguridad
+Los registros previos de ChatGPT Sites no se han exportado ni migrado. Permanecen allí; la base nueva es independiente de Sites y de Orbit Tasks. No hay conexión activa con Drive; el adaptador de archivos permite incorporar otro destino sin cambiar la captura.
 
-Es una demo: no tiene prueba de vida ni verificación del documento. Los vectores se extraen en el navegador y no constituyen evidencia resistente a un cliente manipulado. La autorización real de los datos depende del acceso de Sites y la cuenta/sesión, no de una autenticación biométrica de producción. Antes de usar con información sensible hacen falta inferencia o evidencia verificable en servidor, protección contra presentación y abuso, recuperación segura, cifrado y gestión de claves según el cliente, y evaluación de precisión y sesgos.
+## Desarrollo
 
-La IP se obtiene de los encabezados del borde confiable, sin usar un `X-Forwarded-For` enviado por el cliente. Puede representar una VPN, NAT o intermediario; no prueba identidad ni ubicación exacta.
+Node 24 y Python 3:
 
-No se deben subir fotos, documentos, vectores reales, credenciales o estados locales al repositorio. La foto administrativa se guarda separada de la biometría.
-
-## Ejecutar y verificar
-
-Requiere Node 24 (las pruebas de integración usan `node:sqlite`) y Python 3. Instala las dependencias y modelos verificados:
-
-```bash
+```sh
 npm ci
-python scripts/download_assets.py
-```
-
-En un clon nuevo crea `.openai/hosting.json` a partir de `.openai/hosting.example.json`, sin reutilizar el identificador de otro Site. La publicación original conserva su propio identificador. Configura `ADMIN_EMAIL` únicamente como variable de servidor para el entorno autorizado. La ejecución local sin identidad debe responder 401; nunca habilites un bypass de identidad en producción.
-
-```bash
 npm test
-npm run db:generate
+npm run assets
 npm run build
 ```
 
-Las migraciones generadas están en `drizzle/`. El despliegue de Sites aplica las migraciones en el servidor. Para un entorno local nuevo, aplica cada migración una sola vez con Wrangler y el archivo `dist/server/wrangler.json`, por ejemplo:
+`pages-dist/` contiene únicamente archivos públicos y se excluye de Git. El instalador descarga los modelos y face-api.js 0.22.2 y comprueba SHA-256. `scripts/build-pages.mjs` copia el servicio compartido a la carpeta de la función para su despliegue; esas copias son generadas, no se mantienen a mano.
 
-```bash
-node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0000_acoustic_hawkeye.sql
-node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0001_certain_madame_web.sql
-npm run dev
-```
+`drizzle/*.sql` conserva exclusivamente el esquema SQLite de las pruebas del servicio compartido; no es la base de producción. La instalación PostgreSQL inicial está en `supabase/schema.sql`. Al añadir una sentencia al servicio, actualizar la lista explícita de sentencias permitidas y aplicar su migración en Supabase.
 
-`python -m http.server 8000 --directory public` sirve únicamente el laboratorio local. QR, perfiles, administración y persistencia requieren el servidor Worker y una identidad válida de Sites.
+## Despliegue
 
-Las pruebas cubren encuadre, captura, cancelación, comparación, unicidad, idempotencia, pausas, permisos, QR y sustitución/eliminación con SQLite real y un almacén de objetos de prueba. No miden precisión biométrica ni sustituyen pruebas con cámaras y celulares reales.
+- `.github/workflows/deploy-pages.yml`: push a main → npm ci → pruebas → descarga verificada → build → GitHub Pages. Configurar Settings → Pages → Source: **GitHub Actions** una vez.
+- `.github/workflows/deploy-backend.yml`: despliegue manual o por cambios del servidor, con `SUPABASE_ACCESS_TOKEN` como Actions Secret y `SUPABASE_AUTODEPLOY=true` como variable del repositorio. Hasta configurarlos se conserva el backend ya desplegado. La clave de servicio no va a GitHub Pages. Cambios de esquema se aplican mediante migraciones separadas, nunca automáticamente desde el navegador.
+- Proyecto Supabase independiente: `hckqcyhsnuwblwjvqpdi`, región São Paulo.
+- Configurar en Supabase Authentication → URL Configuration el Site URL `https://davidduque29.github.io/identity-lab/` y Redirect URL `https://davidduque29.github.io/identity-lab/admin-login.html`.
+- El administrador puede entrar desde el menú con el enlace de correo o código. Para enviar un código visible, la plantilla de correo debe incluir `{{ .Token }}`; el enlace también está soportado por `admin-login.html`.
+
+El primer backend se desplegó con la conexión de Supabase. La configuración del correo y el inicio administrativo real requieren verificación por el titular de la cuenta. No compartir contraseñas, OTP ni claves de servicio en el chat.

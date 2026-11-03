@@ -23,13 +23,16 @@ let context,
   pageOffset = 0,
   pollTimer;
 async function api(action, data) {
-  const response = await fetch('/api/lab?action=' + action, {
-    method: data ? 'POST' : 'GET',
-    credentials: 'same-origin',
-    cache: 'no-store',
-    headers: data ? { 'Content-Type': 'application/json' } : {},
-    body: data ? JSON.stringify(data) : undefined,
-  });
+  const response = await (window.IdentityTransport?.fetch || fetch)(
+    '/api/lab?action=' + action,
+    {
+      method: data ? 'POST' : 'GET',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: data ? { 'Content-Type': 'application/json' } : {},
+      body: data ? JSON.stringify(data) : undefined,
+    },
+  );
   const result = await response.json();
   if (!response.ok) {
     const e = new Error(result.error || 'No se pudo completar la operación.');
@@ -86,7 +89,7 @@ async function createQr(mode) {
 function avatarElement(avatar) {
   if (avatar.kind === 'upload') {
     const image = new Image();
-    image.src = '/api/lab?action=avatar&v=' + Date.now();
+    window.IdentityTransport.image(image, '/api/lab?action=avatar&v=' + Date.now());
     image.alt = 'Avatar administrativo';
     return image;
   }
@@ -151,7 +154,7 @@ async function resizeAvatar(file) {
   bitmap.close();
   return canvas.toDataURL('image/jpeg', 0.86);
 }
-function showProfile(p) {
+async function showProfile(p, id) {
   const dl = document.createElement('dl');
   for (const [label, value] of [
     ['Nombre', [p.firstName, p.middleName, p.lastName].filter(Boolean).join(' ')],
@@ -162,6 +165,40 @@ function showProfile(p) {
   ])
     dl.append(textNode('dt', label), textNode('dd', value || '—'));
   byId('profileDetailBody').replaceChildren(dl);
+  try {
+    const details = await api('admin-profile&id=' + encodeURIComponent(id));
+    const image = new Image();
+    window.IdentityTransport.image(
+      image,
+      '/api/lab?action=reference-photo&id=' + encodeURIComponent(id),
+    );
+    image.alt = 'Referencia facial registrada';
+    image.className = 'reference-preview';
+    const technical = document.createElement('details'),
+      title = textNode('summary', 'Plantilla facial y datos técnicos (administración)');
+    technical.append(
+      title,
+      textNode(
+        'p',
+        'Modelo: ' +
+          details.biometric.model +
+          ' · versión ' +
+          details.biometric.schemaVersion +
+          ' · fotos guardadas: ' +
+          details.referenceCount,
+      ),
+    );
+    const vector = textNode(
+      'pre',
+      JSON.stringify(details.biometric.descriptors, null, 2),
+    );
+    vector.className = 'admin-vector';
+    technical.append(vector);
+    byId('profileDetailBody').append(image, technical);
+  } catch (error) {
+    byId('profileDetailBody').append(textNode('p', error.message));
+  }
+
   byId('profileDetail').showModal();
 }
 function renderUsers() {
@@ -187,9 +224,10 @@ function renderUsers() {
     const actions = document.createElement('td');
     const detail = textNode('button', 'Ver datos');
     detail.className = 'secondary';
-    detail.onclick = () => showProfile(p);
+    detail.onclick = () => showProfile(p, u.id);
     actions.append(detail);
     for (const [action, label] of [
+      ...(u.referenceCount > 1 ? [['compact-reference', 'Conservar solo 1 foto']] : []),
       ['unlock', 'Desbloquear'],
       [
         'allow-update',
@@ -205,7 +243,9 @@ function renderUsers() {
         if (!reason) return;
         if (
           action === 'delete' &&
-          !confirm('Se eliminarán el perfil, las tres fotos y los vectores. ¿Continuar?')
+          !confirm(
+            'Se eliminarán el perfil, la foto de referencia y su plantilla facial. ¿Continuar?',
+          )
         )
           return;
         button.disabled = true;
@@ -246,8 +286,19 @@ async function refreshAdmin() {
       [
         date(e.created_at),
         e.action + ' / ' + (e.profile_id?.slice(0, 8) || 'Administración'),
-        r ? (r.match ? 'Coincide' : 'No coincide') + ' · ' + r.mean.toFixed(3) : '—',
-        p.network?.ip || 'No disponible',
+        r
+          ? (r.match ? 'Coincide' : 'No coincide') +
+            (r.similarity !== undefined ? ' · índice ' + r.similarity + '%' : '') +
+            ' · distancia ' +
+            r.mean.toFixed(6) +
+            ' · umbral ' +
+            r.threshold +
+            ' · distancias ' +
+            r.distances.map((d) => d.toFixed(6)).join(' / ')
+          : '—',
+        p.network?.ip
+          ? (p.network.ip.includes(':') ? 'IPv6: ' : 'IPv4: ') + p.network.ip
+          : 'No disponible',
         p.reason ||
           (p.rules
             ? 'Máx. ' +
@@ -333,7 +384,7 @@ byId('purgeEvents').onclick = async () => {
     if (token) {
       history.replaceState(null, '', location.pathname);
       const claimed = await api('claim', { token });
-      location.replace('/index.html?flow=' + claimed.mode + '&paired=1');
+      location.replace('index.html?flow=' + claimed.mode + '&paired=1');
       return;
     }
     // Returning to the portal ends the previous browser capture session, not the stored profile.

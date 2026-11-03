@@ -100,25 +100,25 @@ const registration = (overrides = {}) => ({
     address: 'Dirección de prueba',
     consent: true,
   },
-  samples: [0, 1, 2].map(() => ({
+  samples: [0].map(() => ({
     descriptor: vec(0),
     image: 'data:image/jpeg;base64,/9j/AA==',
   })),
   ...overrides,
 });
 
-test('server registers only three references, prevents duplicates and retries safely', async () => {
+test('server registers only one reference, prevents duplicates and retries safely', async () => {
   const h = harness(),
     input = registration();
   const first = await h.call('register', input);
   assert.equal(first.status, 200);
-  assert.equal(h.objects.size, 3);
+  assert.equal(h.objects.size, 1);
   const replay = await h.call('register', input);
   assert.equal(replay.content.id, first.content.id);
-  assert.equal(h.objects.size, 3);
+  assert.equal(h.objects.size, 1);
   const duplicate = await h.call('register', registration());
   assert.equal(duplicate.status, 409);
-  assert.equal(h.objects.size, 3);
+  assert.equal(h.objects.size, 1);
   assert.equal(h.sql.prepare('SELECT COUNT(*) AS n FROM profiles').get().n, 1);
   const event = JSON.parse(h.sql.prepare('SELECT payload FROM events').get().payload);
   assert.equal(event.network.ip, '203.0.113.40');
@@ -153,7 +153,7 @@ test('three mismatches lock on server; fourth attempt cannot compare; success cl
   });
   assert.equal(fourth.status, 429);
   assert.ok(fourth.content.retryAt > Date.now());
-  assert.equal(h.objects.size, 3);
+  assert.equal(h.objects.size, 1);
   await h.call('unlock', { id, reason: 'Prueba administrativa autorizada' });
   const retryId = crypto.randomUUID();
   await h.call('verify', { id, descriptor: vec(1), requestId: retryId });
@@ -198,9 +198,9 @@ test('admin authorization, origin validation, private profile ownership and inpu
   assert.equal((await h.call('register', registration({ samples: [] }))).status, 409);
   const invalid = registration();
   invalid.profile.documentNumber = '987654321';
-  invalid.samples[1].descriptor = [NaN];
+  invalid.samples[0].descriptor = [NaN];
   assert.equal((await h.call('register', invalid)).status, 400);
-  assert.equal(h.objects.size, 3);
+  assert.equal(h.objects.size, 1);
 });
 
 test('QR is temporary, claimed once, and pairs the phone with the creator scope', async () => {
@@ -238,7 +238,7 @@ test('reference update requires permission, replaces photos, and deletion remove
   assert.equal((await h.call('register', registration({ updateId: id }))).status, 409);
   await h.call('allow-update', { id, reason: 'Nueva referencia solicitada' });
   assert.equal((await h.call('register', registration({ updateId: id }))).status, 200);
-  assert.equal(h.objects.size, 3);
+  assert.equal(h.objects.size, 1);
   assert.ok(oldKeys.every((k) => !h.objects.has(k)));
   assert.equal(
     (await h.call('delete', { id, reason: 'El titular solicita borrado' })).status,
@@ -282,5 +282,227 @@ test('rules bounds and expired pause behavior are deterministic', () => {
     nextAttempt({ failures: 2, locked_until: 0 }, true, DEFAULTS, 101).failures,
     0,
   );
-  assert.equal(compare([vec(0), vec(0), vec(0)], vec(0), 0.5).match, true);
+  assert.equal(compare([vec(0)], vec(0), 0.5).match, true);
+});
+
+test('one-photo enrollment rejects extra samples and technical details stay admin-only', async () => {
+  const h = harness(),
+    input = registration();
+  input.samples.push({ ...input.samples[0] });
+  assert.equal((await h.call('register', input)).status, 400);
+  assert.equal(h.objects.size, 0);
+  const saved = await h.call('register', registration()),
+    id = saved.content.id;
+  const verified = await h.call('verify', {
+    id,
+    descriptor: vec(0),
+    requestId: crypto.randomUUID(),
+  });
+  assert.equal(verified.content.similarity, 100);
+  assert.equal(verified.content.match, true);
+  for (const field of ['mean', 'distances', 'threshold', 'scoreVersion'])
+    assert.equal(field in verified.content, false);
+  const event = JSON.parse(
+    h.sql.prepare("SELECT payload FROM events WHERE action='verify'").get().payload,
+  );
+  assert.equal(event.result.mean, 0);
+  assert.equal(event.result.threshold, 0.5);
+  assert.equal(event.result.distances.length, 1);
+  const admin = await h.call('admin-profile&id=' + id);
+  assert.equal(admin.content.biometric.descriptors.length, 1);
+  assert.equal(
+    (
+      await h.call('admin-profile&id=' + id, undefined, {
+        actor: 'guest',
+        email: 'guest@example.com',
+      })
+    ).status,
+    403,
+  );
+  assert.equal(
+    (
+      await h.call('reference-photo&id=' + id, undefined, {
+        actor: 'guest',
+        email: 'guest@example.com',
+      })
+    ).status,
+    403,
+  );
+});
+
+test('legacy records can be reduced to one photo without losing profile or requiring reenrollment', async () => {
+  const h = harness(),
+    saved = await h.call('register', registration()),
+    id = saved.content.id;
+  const row = h.sql.prepare('SELECT * FROM profiles').get(),
+    media = JSON.parse(row.media),
+    biometric = JSON.parse(row.biometric);
+  const extras = [media[0] + '-old2', media[0] + '-old3'];
+  extras.forEach((k) => h.objects.set(k, { body: new Uint8Array([1]) }));
+  h.sql.prepare('UPDATE profiles SET media=?,biometric=? WHERE id=?').run(
+    JSON.stringify([...media, ...extras]),
+    JSON.stringify({
+      ...biometric,
+      schemaVersion: 1,
+      descriptors: [vec(0), vec(1), vec(1)],
+    }),
+    id,
+  );
+  const matched = await h.call('verify', {
+    id,
+    descriptor: vec(0),
+    requestId: crypto.randomUUID(),
+  });
+  assert.equal(matched.content.match, true);
+  assert.equal(
+    (
+      await h.call('compact-reference', {
+        id,
+        reason: 'Conservar una sola foto autorizada',
+      })
+    ).status,
+    200,
+  );
+  assert.equal(h.objects.size, 1);
+  assert.equal(
+    JSON.parse(h.sql.prepare('SELECT media FROM profiles').get().media).length,
+    1,
+  );
+  assert.equal(
+    JSON.parse(h.sql.prepare('SELECT data FROM profiles').get().data).firstName,
+    'Persona',
+  );
+});
+
+test('paired phone moves explicitly from enrollment to verification in the same session', async () => {
+  const h = harness(),
+    qr = await h.call('qr', { mode: 'register' }),
+    token = new URL(qr.content.link).hash.slice(4);
+  const guest = { actor: 'phone-user', email: 'guest@example.com' };
+  const claim = await h.call('claim', { token }, guest),
+    cookie = claim.headers.get('set-cookie').split(';')[0],
+    session = { ...guest, cookie };
+  const saved = await h.call('register', registration(), session);
+  assert.equal(
+    (
+      await h.call(
+        'verify',
+        { id: saved.content.id, descriptor: vec(0), requestId: crypto.randomUUID() },
+        session,
+      )
+    ).status,
+    403,
+  );
+  assert.equal((await h.call('begin-verification', {}, session)).status, 200);
+  const match = await h.call(
+    'verify',
+    { id: saved.content.id, descriptor: vec(0), requestId: crypto.randomUUID() },
+    session,
+  );
+  assert.equal(match.content.match, true);
+  assert.equal(match.content.profile.firstName, 'Persona');
+});
+
+test('a completed QR verification can explicitly restart without creating another reference', async () => {
+  const h = harness(),
+    qr = await h.call('qr', { mode: 'register' }),
+    token = new URL(qr.content.link).hash.slice(4);
+  const guest = { actor: 'phone', email: 'phone@example.test' },
+    claim = await h.call('claim', { token }, guest),
+    cookie = claim.headers.get('set-cookie').split(';')[0],
+    ctx = { ...guest, cookie };
+  const saved = await h.call('register', registration(), ctx),
+    id = saved.content.id;
+  await h.call('begin-verification', {}, ctx);
+  const first = await h.call(
+    'verify',
+    { id, descriptor: vec(0), requestId: crypto.randomUUID() },
+    ctx,
+  );
+  assert.equal(first.content.match, true);
+  assert.equal((await h.call('repeat-verification', { id }, ctx)).status, 200);
+  const second = await h.call(
+    'verify',
+    { id, descriptor: vec(0), requestId: crypto.randomUUID() },
+    ctx,
+  );
+  assert.equal(second.content.match, true);
+  assert.equal(h.objects.size, 1);
+  assert.equal(
+    h.sql.prepare("SELECT COUNT(*) AS n FROM events WHERE action='verify'").get().n,
+    2,
+  );
+});
+
+test('reference evidence is bound to a recent successful comparison by the same actor', async () => {
+  const h = harness(),
+    saved = await h.call('register', registration()),
+    id = saved.content.id,
+    requestId = crypto.randomUUID();
+  const verified = await h.call('verify', { id, descriptor: vec(0), requestId });
+  assert.ok(verified.content.evidence.referenceUrl);
+  assert.ok(verified.content.evidence.comparedAt);
+  const url = 'https://lab.test' + verified.content.evidence.referenceUrl;
+  const headers = {
+    'oai-authenticated-user-id': 'owner',
+    'oai-authenticated-user-email': 'admin@example.test',
+  };
+  const image = await handleLab(new Request(url, { headers }), h.env);
+  assert.equal(image.status, 200);
+  assert.equal(image.headers.get('cache-control'), 'private, no-store');
+  assert.ok((await image.arrayBuffer()).byteLength > 0);
+  const foreign = await handleLab(
+    new Request(url, { headers: { ...headers, 'oai-authenticated-user-id': 'other' } }),
+    h.env,
+  );
+  assert.equal(foreign.status, 404);
+  const failedId = crypto.randomUUID(),
+    failed = await h.call('verify', { id, descriptor: vec(1), requestId: failedId });
+  assert.equal(failed.content.evidence.referenceUrl, null);
+  const denied = await h.call('reference-proof&id=' + id + '&attemptId=' + failedId);
+  assert.equal(denied.status, 403);
+  h.sql
+    .prepare('UPDATE events SET created_at=? WHERE id=?')
+    .run(Date.now() - 600000, requestId);
+  const expired = await h.call('reference-proof&id=' + id + '&attemptId=' + requestId);
+  assert.equal(expired.status, 404);
+});
+
+test('public deployment warns about an existing document and offers comparison across devices without exposing the profile', async () => {
+  const h = harness();
+  h.env.PUBLIC_DEMO = true;
+  h.env.PUBLIC_APP_URL = 'https://davidduque29.github.io/identity-lab/';
+  const saved = await h.call('register', registration());
+  assert.equal(saved.status, 200);
+  const ctx = await h.call('context');
+  assert.deepEqual(ctx.content.existingRecord, { id: saved.content.id });
+  assert.equal(JSON.stringify(ctx.content).includes('birthDate'), false);
+  const status = await h.call(
+    'record-status',
+    {
+      documentType: registration().profile.documentType,
+      documentNumber: registration().profile.documentNumber,
+    },
+    { actor: 'second-device', email: 'visitor@visitor.invalid' },
+  );
+  assert.deepEqual(status.content, { exists: true });
+  const duplicate = await h.call('register', registration(), {
+    actor: 'second-device',
+    email: 'visitor@visitor.invalid',
+  });
+  assert.equal(duplicate.status, 409);
+  assert.equal(h.objects.size, 1);
+  const other = await h.call('context', undefined, {
+    actor: 'second-device',
+    email: 'visitor@visitor.invalid',
+  });
+  assert.equal(other.content.existingRecord, null);
+  const qr = await h.call('qr', { mode: 'verify' });
+  assert.ok(qr.content.link.startsWith(h.env.PUBLIC_APP_URL + 'portal.html#qr='));
+  const lookup = await h.call('lookup', registration().profile, {
+    actor: 'second-device',
+    email: 'visitor@visitor.invalid',
+  });
+  assert.equal(lookup.content.id, saved.content.id);
+  assert.equal(lookup.content.profile, undefined);
 });

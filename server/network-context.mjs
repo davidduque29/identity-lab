@@ -14,6 +14,7 @@ export function getNetworkContext(request, now = new Date()) {
       /^(fc|fd|fe80:)/i.test(ip));
   return {
     status: !valid ? 'unavailable' : isProxy ? 'proxy' : local ? 'local' : 'observed',
+    ipVersion: valid ? Number(valid) : null,
     ip: valid && !isProxy && !local ? ip : null,
     observedAt: now.toISOString(),
     source: valid ? 'edge-connecting-ip' : null,

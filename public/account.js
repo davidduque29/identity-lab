@@ -21,7 +21,7 @@
       menu.open = false;
     }),
   );
-  fetch('/api/lab?action=context', {
+  (window.IdentityTransport?.fetch || fetch)('/api/lab?action=context', {
     credentials: 'same-origin',
     cache: 'no-store',
     signal: controller.signal,
@@ -30,18 +30,19 @@
       const context = await response.json();
       if (!response.ok)
         throw new Error('Inicia sesión para ver las opciones de tu cuenta.');
-      label.textContent = context.email;
+      label.textContent = context.admin ? context.email : 'Visitante';
       subtitle.textContent = context.admin
         ? 'Cuenta administradora'
-        : 'Cuenta autorizada';
-      document.getElementById('accountSignIn').hidden = true;
-      document.getElementById('accountSignOut').hidden = false;
+        : 'Sesión de demostración';
+      document.getElementById('accountSignIn').hidden = context.admin;
+      document.getElementById('accountSignIn').textContent = 'Entrar como administrador';
+      document.getElementById('accountSignOut').hidden = !context.admin;
       const adminLink = document.getElementById('accountAdminLink');
       if (adminLink) adminLink.hidden = !context.admin;
       document.getElementById('accountProfileLink').hidden = !context.admin;
       if (context.admin && context.avatar?.kind === 'upload') {
         const img = new Image();
-        img.src = '/api/lab?action=avatar';
+        window.IdentityTransport.image(img, '/api/lab?action=avatar');
         img.alt = 'Foto de tu cuenta';
         avatar.replaceChildren(img);
       } else if (context.admin && context.avatar?.kind === 'preset')
