@@ -121,6 +121,7 @@ test('persistent comparison uses a fresh photo, displays percentage and always d
   await vm.runInContext(
     `(async()=>{
     await adapter.load();resumeMonitor=()=>{};prepareCapture=async()=>true;stream={getTracks:()=>[]};
+    globalThis.stops=0;stream={getTracks:()=>[{stop(){stops++;}}]};
     globalThis.sent=0;globalThis.sample={descriptor:new Float32Array(128).fill(.2),image:'new-temporary-photo',capturedAt:new Date(),box:{x:.3,y:.25,width:.4,height:.5}};
     window.IdentityWorkflow={mode:'verify',ready:()=>true,async verify(s,current){if(s===sample&&current())sent++;return {match:true,similarity:82,remaining:3};},onError(){},reset(){}};
     adapter.capture=async()=>sample;await verify();
@@ -128,6 +129,9 @@ test('persistent comparison uses a fresh photo, displays percentage and always d
     context,
   );
   assert.equal(context.sent, 1);
+  assert.equal(context.stops, 1);
+  assert.equal(nodes.get('cameraStatus').textContent, 'Cámara apagada');
+  assert.match(nodes.get('alignmentHint').textContent, /finalizada/);
   assert.equal(context.sample.image, '');
   assert.ok([...context.sample.descriptor].every((n) => n === 0));
   const collect = (n) => [n.textContent || '', ...(n.children || []).flatMap(collect)];
@@ -212,6 +216,7 @@ test('default entry initializes the full workflow without randomUUID and opens t
     document: {
       getElementById: get,
       createElement: () => new Element(),
+      createTextNode: (text) => ({ textContent: text }),
       querySelector: () => ({ before() {} }),
       body: {
         append(node) {
@@ -229,7 +234,24 @@ test('default entry initializes the full workflow without randomUUID and opens t
       calls.push(url);
       return {
         ok: true,
-        json: async () => ({ rules: { threshold: 0.5 }, session: null }),
+        json: async () =>
+          url.includes('action=register')
+            ? { id: 'person-test', saved: true }
+            : url.includes('action=verify')
+              ? {
+                  match: true,
+                  similarity: 82,
+                  remaining: 3,
+                  profile: {
+                    firstName: 'Persona',
+                    lastName: 'Prueba',
+                    documentType: 'CC',
+                    documentNumber: '123456',
+                    birthDate: '1990-01-01',
+                    address: 'Prueba',
+                  },
+                }
+              : { rules: { threshold: 0.5 }, session: null },
       };
     },
     FormData: class {
@@ -263,4 +285,30 @@ test('default entry initializes the full workflow without randomUUID and opens t
   await get('identityForm').onsubmit({ preventDefault() {} });
   await formPromise;
   assert.equal(get('registrationDialog').open, false);
+  const reference = {
+    image: 'data:image/jpeg;base64,reference',
+    descriptor: new Float32Array(128),
+    capturedAt: new Date('2026-11-03T00:00:00Z'),
+  };
+  await context.window.IdentityWorkflow.save([reference]);
+  assert.equal(get('compareHere').hidden, false);
+  assert.equal(context.window.IdentityWorkflow.canCompare(), true);
+  assert.equal(get('referenceProofImage').src, reference.image);
+  await context.window.IdentityWorkflow.prepareVerification();
+  const probe = {
+    ...reference,
+    image: 'data:image/jpeg;base64,second',
+    capturedAt: new Date('2026-11-03T00:01:00Z'),
+  };
+  await context.window.IdentityWorkflow.verify(probe);
+  assert.equal(get('comparisonProofImage').src, probe.image);
+  assert.notEqual(get('referenceProofImage').src, get('comparisonProofImage').src);
+  assert.equal(get('repeatComparison').hidden, false);
+  assert.equal(context.window.IdentityWorkflow.completed(), true);
+  assert.equal(get('compareHere').hidden, true);
+  await get('repeatComparison').onclick();
+  assert.equal(get('comparisonProofImage').src, '');
+  assert.equal(get('comparisonProofImage').hidden, true);
+  assert.equal(get('compareHere').hidden, false);
+  assert.equal(context.window.IdentityWorkflow.canCompare(), true);
 });

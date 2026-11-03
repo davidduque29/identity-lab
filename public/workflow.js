@@ -16,7 +16,9 @@
   let submitting = false,
     initialized = false,
     pauseUntil = 0,
-    saved = false;
+    saved = false,
+    completed = false,
+    preparation = null;
   const $w = (id) => document.getElementById(id);
   async function api(action, data) {
     const response = await fetch('/api/lab?action=' + action, {
@@ -37,21 +39,47 @@
   const section = document.createElement('section');
   section.className = 'workflow-top';
   section.innerHTML =
-    '<strong id="workflowTitle"></strong><p id="workflowStatus" role="status">Comprobando la sesión…</p><a href="/portal.html">Inicio y sesiones QR</a><button id="beginVerify" class="primary" hidden>Continuar y verificar mi rostro</button><div id="personData" class="registered-data" hidden></div>';
+    '<strong id="workflowTitle"></strong><p id="workflowStatus" role="status">Comprobando la sesión…</p><a href="/portal.html">Inicio y sesiones QR</a>';
   document.querySelector('.workspace').before(section);
   const notice = (message) => {
     $w('workflowStatus').textContent = message;
   };
   function modeUI() {
     $w('workflowTitle').textContent =
-      mode === 'register'
-        ? '1. Una foto → 2. Tus datos → 3. Confirmación'
-        : 'Verificación · una foto nueva';
-    $w('captureHere').hidden = mode === 'verify';
-    $w('compareHere').hidden = mode === 'register';
-    $w('registerStep').hidden = mode === 'verify';
-    $w('compareStep').hidden = mode === 'register';
+      '1. Foto de registro → 2. Foto NUEVA → 3. Resultado';
+    $w('captureHere').hidden = !!targetId || mode === 'verify';
+    $w('compareHere').hidden = !targetId || completed;
+    $w('repeatComparison').hidden = !completed;
+    $w('registerStep').hidden = false;
+    $w('compareStep').hidden = false;
     $w('inspection').hidden = true;
+  }
+  const time = (value) =>
+    new Date(value || Date.now()).toLocaleTimeString('es-CO', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+  function imageEvidence(prefix, src, label) {
+    $w(prefix + 'ProofImage').onerror = () => {
+      $w(prefix + 'ProofImage').hidden = true;
+      $w(prefix + 'ProofPlaceholder').hidden = false;
+      $w(prefix + 'ProofPlaceholder').textContent =
+        'No se pudo mostrar la miniatura. El resultado se conserva.';
+    };
+    $w(prefix + 'ProofImage').src = src;
+    $w(prefix + 'ProofImage').hidden = false;
+    $w(prefix + 'ProofPlaceholder').hidden = true;
+    $w(prefix + 'ProofTime').textContent = label;
+  }
+  function clearComparisonEvidence() {
+    $w('comparisonProofImage').src = '';
+    $w('comparisonProofImage').hidden = true;
+    $w('comparisonProofPlaceholder').hidden = false;
+    $w('comparisonProofTime').textContent =
+      'Pendiente: todavía no se ha tomado la foto 2';
+    $w('personData').replaceChildren();
+    $w('personData').hidden = true;
   }
   modeUI();
   $w('threshold').disabled = true;
@@ -163,7 +191,24 @@
   }
   window.IdentityWorkflow = {
     mode,
-    ready: () => initialized && !saved && Date.now() >= pauseUntil,
+    ready: () => initialized && !completed && Date.now() >= pauseUntil,
+    canCompare: () => !!targetId && initialized && !completed && Date.now() >= pauseUntil,
+    completed: () => completed,
+    async prepareVerification() {
+      if (preparation) {
+        await api(
+          preparation === 'begin' ? 'begin-verification' : 'repeat-verification',
+          { id: targetId },
+        );
+        preparation = null;
+      }
+      mode = 'verify';
+      window.IdentityWorkflow.mode = mode;
+      modeUI();
+      notice(
+        'Ahora tomaremos la FOTO 2, una captura NUEVA, y la compararemos con tu registro.',
+      );
+    },
     async afterFirstSample(sample) {
       requestId = newRequestId();
       $w('registrationPreview').src = sample.image;
@@ -184,27 +229,60 @@
       });
       targetId = result.id;
       saved = true;
-      $w('beginVerify').hidden = false;
+      preparation = 'begin';
+      completed = false;
+      modeUI();
+      imageEvidence(
+        'reference',
+        samples[0].image,
+        'Capturada: ' + time(samples[0].capturedAt),
+      );
+      clearComparisonEvidence();
+      $w('proofStatus').textContent =
+        'Solo está tomada la FOTO 1. Falta tomar la FOTO 2 para comprobar el reconocimiento.';
       notice(
         result.cleanupPending
           ? 'Registro guardado. Hay archivos anteriores pendientes de limpieza; contacta al administrador.'
-          : '✓ Registro guardado: una foto y tus datos. Ahora puedes verificar tu rostro.',
+          : '✓ FOTO 1 guardada con tus datos. Pulsa «2. Tomar FOTO NUEVA y comparar» debajo de la cámara. Todavía no se ha comparado.',
       );
       return result;
     },
     async verify(sample, isCurrent = () => true) {
       if (!targetId) throw new Error('Selecciona primero tu registro.');
       $w('personData').hidden = true;
+      imageEvidence(
+        'comparison',
+        sample.image,
+        'Capturada AHORA: ' + time(sample.capturedAt),
+      );
+      $w('proofStatus').textContent =
+        'La FOTO 2 acaba de tomarse. Comparando con la FOTO 1 registrada…';
       const result = await api('verify', {
         id: targetId,
         descriptor: Array.from(sample.descriptor),
         requestId: newRequestId(),
       });
+      preparation = 'repeat';
       if (!isCurrent()) return result;
+      if (result.evidence?.referenceUrl)
+        imageEvidence(
+          'reference',
+          result.evidence.referenceUrl,
+          'Registro guardado: ' + time(result.evidence.referenceSavedAt),
+        );
+      completed = true;
+      initialized = false;
+      modeUI();
+      $w('proofStatus').textContent =
+        'COMPARACIÓN TERMINADA: se usó la FOTO 1 de registro y la FOTO 2 nueva de las ' +
+        time(sample.capturedAt) +
+        '. No se tomó ninguna otra foto.';
       pauseUntil = result.retryAt || 0;
       if (result.match) {
         displayPerson(result.profile);
-        notice('✓ Tu rostro coincide con el registro. Puedes consultar tus datos.');
+        notice(
+          '✓ Se compararon las dos fotos. Tu rostro coincide con el registro. La cámara se apagará.',
+        );
         initialized = false;
       } else
         notice(
@@ -228,26 +306,44 @@
     reset() {
       $w('personData').replaceChildren();
       $w('personData').hidden = true;
+      clearComparisonEvidence();
+      $w('registrationPreview').src = '';
+      $w('registrationPreview').hidden = true;
+      $w('referenceProofImage').src = '';
+      $w('referenceProofImage').hidden = true;
+      $w('referenceProofPlaceholder').hidden = false;
+      $w('referenceProofTime').textContent = targetId
+        ? 'Registro existente; referencia protegida'
+        : 'Pendiente';
+      $w('proofStatus').textContent =
+        'Miniaturas de esta sesión borradas. El registro persistente se conserva.';
+      completed = false;
+      initialized = true;
+      modeUI();
       requestId = newRequestId();
     },
   };
-  $w('beginVerify').onclick = async () => {
-    $w('beginVerify').disabled = true;
+  $w('repeatComparison').onclick = async () => {
+    $w('repeatComparison').disabled = true;
     try {
-      await api('begin-verification', {});
+      await api('repeat-verification', { id: targetId });
+      preparation = null;
+      clearComparisonEvidence();
+      completed = false;
+      initialized = true;
       mode = 'verify';
       window.IdentityWorkflow.mode = mode;
-      saved = false;
-      initialized = true;
       modeUI();
-      $w('beginVerify').hidden = true;
       notice(
-        'Mira a la cámara y espera el contorno verde. Ahora tomaremos una foto NUEVA para verificarte.',
+        'Nueva comparación preparada. Activa la cámara y toma una FOTO NUEVA. El registro no cambia.',
       );
+      $w('proofStatus').textContent =
+        'La foto anterior de comparación fue borrada. Falta una FOTO 2 nueva.';
+      window.CaptureUI?.prepareNewComparison();
     } catch (e) {
       window.IdentityWorkflow.onError(e);
     } finally {
-      $w('beginVerify').disabled = false;
+      $w('repeatComparison').disabled = false;
     }
   };
   (async () => {
@@ -259,8 +355,15 @@
         throw new Error('Este QR corresponde a otro paso. Vuelve al inicio.');
       $w('threshold').value = ctx.rules.threshold;
       $w('thresholdValue').value = ctx.rules.threshold.toFixed(2);
-      if (mode === 'verify') await askForm(true);
+      if (mode === 'verify') {
+        await askForm(true);
+        $w('referenceProofPlaceholder').textContent =
+          'Referencia guardada: se mostrará después de una coincidencia.';
+        $w('referenceProofTime').textContent =
+          'Registro existente; se mostrará después de una coincidencia.';
+      }
       initialized = true;
+      modeUI();
       notice(
         mode === 'register'
           ? 'Activa la cámara y toma UNA foto. Al aceptarla se abrirá el formulario de datos.'

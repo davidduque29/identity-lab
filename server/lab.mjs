@@ -180,6 +180,44 @@ export async function handleLab(request, env) {
           offset,
         });
       }
+      if (action === 'reference-proof') {
+        const evidence = await one(
+          'SELECT payload,created_at,profile_id FROM events WHERE id=? AND actor=? AND tenant=? AND action=?',
+          url.searchParams.get('attemptId'),
+          actor,
+          TENANT,
+          'verify',
+        );
+        if (
+          !evidence ||
+          evidence.created_at < now - 300000 ||
+          evidence.profile_id !== url.searchParams.get('id')
+        )
+          fail('Esta evidencia ya no está disponible.', 404);
+        const details = parse(evidence.payload);
+        if (!details.result?.match || !details.referenceMedia)
+          fail('Referencia protegida.', 403);
+        const person = await one(
+          'SELECT media,status FROM profiles WHERE id=? AND tenant=?',
+          evidence.profile_id,
+          TENANT,
+        );
+        if (
+          !person ||
+          person.status !== 'active' ||
+          parse(person.media)[0] !== details.referenceMedia
+        )
+          fail('La referencia cambió. Realiza otra comparación.', 409);
+        const image = await storage.get(details.referenceMedia);
+        if (!image) fail('Referencia no disponible.', 404);
+        return new Response(image.body, {
+          headers: {
+            'Content-Type': image.httpMetadata?.contentType || 'image/jpeg',
+            'Cache-Control': 'private, no-store',
+            'X-Content-Type-Options': 'nosniff',
+          },
+        });
+      }
       if (['admin-profile', 'reference-photo'].includes(action)) {
         mustAdmin();
         const p = await one(
@@ -302,6 +340,47 @@ export async function handleLab(request, env) {
       return json({ ok: true }, 200, {
         'Set-Cookie': 'il_session=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0',
       });
+    }
+    if (action === 'repeat-verification') {
+      if (cookie) {
+        const previous = await one(
+          'SELECT * FROM sessions WHERE token_hash=? AND claimant=? AND expires_at>? AND mode=? AND status IN (?,?)',
+          await hash(cookie),
+          actor,
+          now,
+          'verify',
+          'finished',
+          'claimed',
+        );
+        if (!previous)
+          fail('La sesión venció. Abre otra verificación desde el inicio.', 410);
+        const person = await one(
+          'SELECT locked_until,status,owner FROM profiles WHERE id=? AND tenant=?',
+          data.id,
+          TENANT,
+        );
+        if (!person || person.owner !== previous.creator || person.status !== 'active')
+          fail('Registro no disponible.', 404);
+        if (person.locked_until > now)
+          fail('La validación está en pausa.', 429, { retryAt: person.locked_until });
+        await run(
+          'UPDATE sessions SET status=?,expires_at=? WHERE id=?',
+          'claimed',
+          now + rules.qrMinutes * 60000,
+          previous.id,
+        );
+        return json({ ok: true }, 200, {
+          'Set-Cookie':
+            'il_session=' +
+            cookie +
+            '; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=' +
+            rules.qrMinutes * 60,
+        });
+      }
+      const person = await requireProfile(data.id);
+      if (person.locked_until > now)
+        fail('La validación está en pausa.', 429, { retryAt: person.locked_until });
+      return json({ ok: true });
     }
     if (action === 'begin-verification') {
       if (session) {
@@ -507,7 +586,21 @@ export async function handleLab(request, env) {
       let p = await requireProfile(data.id);
       const resultFor = (event, person) => {
         const v = parse(event.payload);
-        return publicVerification(v.result, v.remaining, v.retryAt, parse(person.data));
+        return {
+          ...publicVerification(v.result, v.remaining, v.retryAt, parse(person.data)),
+          evidence: {
+            referenceSavedAt: v.referenceSavedAt || null,
+            comparedAt: v.comparedAt || null,
+            attemptId,
+            referenceUrl:
+              v.result.match && v.referenceMedia
+                ? '/api/lab?action=reference-proof&id=' +
+                  encodeURIComponent(person.id) +
+                  '&attemptId=' +
+                  encodeURIComponent(attemptId)
+                : null,
+          },
+        };
       };
       const existingEvent = await one(
         'SELECT payload FROM events WHERE id=? AND actor=? AND profile_id=? AND action=?',
@@ -537,6 +630,9 @@ export async function handleLab(request, env) {
           retryAt: counter.lockedUntil || null,
           network: getNetworkContext(request),
           rules,
+          referenceMedia: parse(p.media)[0],
+          referenceSavedAt: p.updated_at,
+          comparedAt: now,
         };
         const batch = await db.batch([
           db
@@ -574,14 +670,7 @@ export async function handleLab(request, env) {
               result.match ? 'finished' : 'claimed',
               session.id,
             );
-          return json(
-            publicVerification(
-              result,
-              counter.remaining,
-              counter.lockedUntil || null,
-              parse(p.data),
-            ),
-          );
+          return json(resultFor({ payload: JSON.stringify(payload) }, p));
         }
         const concurrent = await one(
           'SELECT payload FROM events WHERE id=? AND actor=? AND profile_id=? AND action=?',

@@ -339,17 +339,15 @@ test('legacy records can be reduced to one photo without losing profile or requi
     biometric = JSON.parse(row.biometric);
   const extras = [media[0] + '-old2', media[0] + '-old3'];
   extras.forEach((k) => h.objects.set(k, { body: new Uint8Array([1]) }));
-  h.sql
-    .prepare('UPDATE profiles SET media=?,biometric=? WHERE id=?')
-    .run(
-      JSON.stringify([...media, ...extras]),
-      JSON.stringify({
-        ...biometric,
-        schemaVersion: 1,
-        descriptors: [vec(0), vec(1), vec(1)],
-      }),
-      id,
-    );
+  h.sql.prepare('UPDATE profiles SET media=?,biometric=? WHERE id=?').run(
+    JSON.stringify([...media, ...extras]),
+    JSON.stringify({
+      ...biometric,
+      schemaVersion: 1,
+      descriptors: [vec(0), vec(1), vec(1)],
+    }),
+    id,
+  );
   const matched = await h.call('verify', {
     id,
     descriptor: vec(0),
@@ -403,4 +401,69 @@ test('paired phone moves explicitly from enrollment to verification in the same 
   );
   assert.equal(match.content.match, true);
   assert.equal(match.content.profile.firstName, 'Persona');
+});
+
+test('a completed QR verification can explicitly restart without creating another reference', async () => {
+  const h = harness(),
+    qr = await h.call('qr', { mode: 'register' }),
+    token = new URL(qr.content.link).hash.slice(4);
+  const guest = { actor: 'phone', email: 'phone@example.test' },
+    claim = await h.call('claim', { token }, guest),
+    cookie = claim.headers.get('set-cookie').split(';')[0],
+    ctx = { ...guest, cookie };
+  const saved = await h.call('register', registration(), ctx),
+    id = saved.content.id;
+  await h.call('begin-verification', {}, ctx);
+  const first = await h.call(
+    'verify',
+    { id, descriptor: vec(0), requestId: crypto.randomUUID() },
+    ctx,
+  );
+  assert.equal(first.content.match, true);
+  assert.equal((await h.call('repeat-verification', { id }, ctx)).status, 200);
+  const second = await h.call(
+    'verify',
+    { id, descriptor: vec(0), requestId: crypto.randomUUID() },
+    ctx,
+  );
+  assert.equal(second.content.match, true);
+  assert.equal(h.objects.size, 1);
+  assert.equal(
+    h.sql.prepare("SELECT COUNT(*) AS n FROM events WHERE action='verify'").get().n,
+    2,
+  );
+});
+
+test('reference evidence is bound to a recent successful comparison by the same actor', async () => {
+  const h = harness(),
+    saved = await h.call('register', registration()),
+    id = saved.content.id,
+    requestId = crypto.randomUUID();
+  const verified = await h.call('verify', { id, descriptor: vec(0), requestId });
+  assert.ok(verified.content.evidence.referenceUrl);
+  assert.ok(verified.content.evidence.comparedAt);
+  const url = 'https://lab.test' + verified.content.evidence.referenceUrl;
+  const headers = {
+    'oai-authenticated-user-id': 'owner',
+    'oai-authenticated-user-email': 'admin@example.test',
+  };
+  const image = await handleLab(new Request(url, { headers }), h.env);
+  assert.equal(image.status, 200);
+  assert.equal(image.headers.get('cache-control'), 'private, no-store');
+  assert.ok((await image.arrayBuffer()).byteLength > 0);
+  const foreign = await handleLab(
+    new Request(url, { headers: { ...headers, 'oai-authenticated-user-id': 'other' } }),
+    h.env,
+  );
+  assert.equal(foreign.status, 404);
+  const failedId = crypto.randomUUID(),
+    failed = await h.call('verify', { id, descriptor: vec(1), requestId: failedId });
+  assert.equal(failed.content.evidence.referenceUrl, null);
+  const denied = await h.call('reference-proof&id=' + id + '&attemptId=' + failedId);
+  assert.equal(denied.status, 403);
+  h.sql
+    .prepare('UPDATE events SET created_at=? WHERE id=?')
+    .run(Date.now() - 600000, requestId);
+  const expired = await h.call('reference-proof&id=' + id + '&attemptId=' + requestId);
+  assert.equal(expired.status, 404);
 });

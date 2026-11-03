@@ -537,3 +537,140 @@ td {
     margin-right: 10px !important;
   }
 }
+.capture-receipt {
+  margin: 18px 24px;
+  padding: 17px;
+  border: 1px solid #dce5d7;
+  border-radius: 13px;
+  background: #fafcf7;
+}
+.capture-receipt h3 {
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+.proof-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.proof-grid figure {
+  margin: 0;
+  min-width: 0;
+}
+.proof-frame {
+  aspect-ratio: 4/3;
+  border-radius: 9px;
+  overflow: hidden;
+  border: 1px solid #dce4d6;
+  background: #eaf0e5;
+  display: grid;
+  place-items: center;
+}
+.proof-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  grid-area: 1/1;
+}
+.proof-frame span {
+  font-size: 11px;
+  padding: 14px;
+  text-align: center;
+  color: #62765e;
+  grid-area: 1/1;
+}
+.proof-grid figcaption {
+  display: grid;
+  gap: 5px;
+  padding-top: 8px;
+  font-size: 10px;
+  color: #62765e;
+}
+.proof-grid strong {
+  font-size: 11px;
+  color: #20382c;
+}
+.capture-receipt p {
+  font-size: 11px;
+  line-height: 1.6;
+  margin: 12px 0 0;
+}
+.capture-receipt .proof-privacy {
+  font-size: 10px;
+  color: #71816a;
+}
+.registered-data {
+  margin: 16px 24px;
+}
+.panel > #repeatComparison {
+  margin: 16px 24px;
+  max-width: calc(100% - 48px);
+  width: calc(100% - 48px);
+}
+.alignment-hint[data-state='complete'] {
+  background: #edf5e6;
+  border-color: #a8c58c;
+  color: #2b563b !important;
+}
+.proof-frame img[hidden],
+.proof-frame span[hidden] {
+  display: none !important;
+}
+@media (max-width: 600px) {
+  .capture-receipt {
+    margin: 14px 16px;
+    padding: 13px;
+  }
+  .proof-grid {
+    gap: 8px;
+  }
+  .proof-grid figcaption {
+    font-size: 9px;
+  }
+  .proof-frame span {
+    font-size: 10px;
+    padding: 8px;
+  }
+  .registered-data {
+    margin: 14px 16px;
+  }
+}
+/* Compact the repeated instructions so both evidence and decision stay close to the camera. */
+aside .panel > #registerStep,
+aside .panel > #compareStep {
+  padding-top: 12px;
+  padding-bottom: 10px;
+}
+aside .panel > .divider {
+  margin: 5px 24px;
+}
+aside #registerStep .step-instruction,
+aside #compareStep .step-instruction {
+  display: none;
+}
+aside #registerStep > div > p,
+aside #compareStep > div > p {
+  font-size: 11px;
+  margin: 4px 0;
+}
+.capture-receipt .proof-frame {
+  max-height: 135px;
+}
+.capture-receipt .proof-privacy {
+  line-height: 1.4;
+}
+aside .step-status {
+  margin-top: 10px;
+  margin-bottom: 10px;
+  font-size: 11px;
+}
+.proof-grid figcaption strong {
+  line-height: 1.3;
+}
+#referencePreview {
+  display: none !important;
+}
+
+.capture-actions > button:not([hidden]) {
+  grid-column: 1/-1;
+}

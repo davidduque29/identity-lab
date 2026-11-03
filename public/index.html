@@ -12,9 +12,9 @@
     <script defer src="vendor/face-api.min.js"></script>
     <script defer src="capture-quality.js?v=8"></script>
     <link rel="stylesheet" href="portal.css?v=8" />
-    <script defer src="workflow.js?v=8"></script>
-    <script defer src="app.js?v=8"></script>
-    <link rel="stylesheet" href="/interface.css?v=8" />
+    <script defer src="workflow.js?v=9"></script>
+    <script defer src="app.js?v=9"></script>
+    <link rel="stylesheet" href="/interface.css?v=9" />
     <script defer src="/account.js?v=8"></script>
   </head>
   <body>
@@ -141,9 +141,9 @@
             </div>
             <div id="countdown" class="countdown" hidden aria-live="assertive"></div>
             <div id="empty" class="empty">
-              <span class="face-icon">◎</span>
-              <h3>El primer paso eres tú</h3>
-              <p>
+              <span id="emptyIcon" class="face-icon">◎</span>
+              <h3 id="emptyTitle">El primer paso eres tú</h3>
+              <p id="emptyMessage">
                 Activa la cámara y ubica tu rostro<br />en el centro, con buena
                 iluminación.
               </p>
@@ -156,9 +156,14 @@
           <div class="camera-foot">
             <div class="capture-actions">
               <button id="captureHere" class="primary" disabled>
-                1. Tomar mi foto de registro</button
+                1. Tomar FOTO DE REGISTRO</button
               ><button id="compareHere" class="secondary" disabled>
-                2. Tomar una foto NUEVA y comparar
+                2. Tomar FOTO NUEVA y comparar
+              </button>
+              <button id="repeatComparison" class="primary" hidden>
+                Hacer otra comparación</button
+              ><button id="reset" class="text-button">
+                Borrar fotos, vectores y resultados
               </button>
             </div>
 
@@ -201,7 +206,7 @@
             <div class="panel-head">
               <div>
                 <span class="eyebrow">TU SESIÓN</span>
-                <h2>De captura a coincidencia</h2>
+                <h2>Registro → Foto nueva → Resultado</h2>
               </div>
             </div>
             <div class="step" id="registerStep" data-active="true">
@@ -232,22 +237,62 @@
                 <h3>Comprueba la coincidencia</h3>
                 <p>Toma una nueva captura para compararla con tu registro.</p>
                 <p class="step-instruction">
-                  Selecciona «Continuar y verificar mi rostro». Luego toma una foto nueva
-                  cuando el contorno esté verde.
+                  Pulsa «2. Tomar FOTO NUEVA y comparar». Habrá otra cuenta regresiva y
+                  una segunda captura distinta de la foto de registro.
                 </p>
               </div>
             </div>
             <p id="stepStatus" class="step-status" role="status" aria-live="polite">
               Activa la cámara y espera el contorno verde. Luego pulsa el botón 1.
             </p>
+            <section class="capture-receipt" aria-label="Las dos fotos del proceso">
+              <h3>Las dos fotos del proceso</h3>
+              <div class="proof-grid">
+                <figure>
+                  <div class="proof-frame">
+                    <img
+                      id="referenceProofImage"
+                      alt="Foto 1: referencia del registro"
+                      hidden
+                    /><span id="referenceProofPlaceholder"
+                      >Aún no hay foto de registro</span
+                    >
+                  </div>
+                  <figcaption>
+                    <strong>1. Foto de registro</strong
+                    ><span id="referenceProofTime">Pendiente</span>
+                  </figcaption>
+                </figure>
+                <figure>
+                  <div class="proof-frame">
+                    <img
+                      id="comparisonProofImage"
+                      alt="Foto 2: captura nueva usada para comparar"
+                      hidden
+                    /><span id="comparisonProofPlaceholder"
+                      >Falta tomar una foto NUEVA</span
+                    >
+                  </div>
+                  <figcaption>
+                    <strong>2. Foto nueva de comparación</strong
+                    ><span id="comparisonProofTime">Pendiente</span>
+                  </figcaption>
+                </figure>
+              </div>
+              <p id="proofStatus" role="status">
+                Todavía no se ha realizado ninguna comparación.
+              </p>
+              <p class="proof-privacy">
+                La foto 2 se muestra solo en esta pestaña. No se guarda en el servidor; se
+                borra al limpiar, repetir o cerrar.
+              </p>
+            </section>
             <div id="result" class="result" aria-live="polite">
               <span class="eyebrow">RESULTADO</span>
               <h3>Esperando tu primera comparación</h3>
               <p>Aquí verás si tu rostro coincide y su similitud orientativa.</p>
             </div>
-            <button id="reset" class="text-button">
-              Borrar fotos, vectores y resultados
-            </button>
+            <div id="personData" class="registered-data" hidden></div>
           </section>
           <div class="notice">
             <span>↳</span>

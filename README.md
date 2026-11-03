@@ -7,15 +7,15 @@ Demo de registro y cotejo facial con face-api.js 0.22.2. Todas las entradas de c
 1. Autoriza la cámara y espera el contorno verde. Las instrucciones se muestran sobre la vista, antes del fotograma, y dentro de él.
 2. Toma **una sola foto**. Cada fotograma se valida por tamaño, posición, pose e iluminación. La guía usa un óvalo más estrecho con coordenadas acordes a la resolución real del video.
 3. La foto aceptada abre un formulario con miniatura, nombre, segundo nombre opcional, apellidos, nacimiento, documento, dirección y consentimiento. Confirmar los datos guarda la foto y el perfil. Cancelar descarta la foto temporal.
-4. «Continuar y verificar mi rostro» habilita una nueva captura en la misma sesión. En otra visita se selecciona el documento desde el flujo de verificación.
-5. El servidor compara el descriptor nuevo con la única referencia. El usuario ve «Tu rostro coincide» o «No se confirmó la coincidencia» y un índice de similitud orientativo del 1 al 100%. Si coincide, aparecen los datos registrados. La foto de comparación se descarta siempre.
+4. «2. Tomar FOTO NUEVA y comparar», debajo de la cámara, inicia otra cuenta regresiva y una segunda captura distinta en la misma sesión. En otra visita se selecciona el documento desde el flujo de verificación.
+5. El servidor compara el descriptor nuevo con la única referencia. El usuario ve «Tu rostro coincide» o «No se confirmó la coincidencia» y un índice de similitud orientativo del 1 al 100%. Si coincide, aparecen los datos registrados. La captura de comparación solo se muestra en memoria en la pestaña, junto a la referencia y sus horas. Nunca se guarda en el servidor y se elimina al limpiar, repetir o cerrar. Los vectores temporales se ponen a cero tras la operación.
 
 El índice usa `round(100 × exp(-ln(2) × (distancia/umbral)^2))`, limitado a 1–100. El umbral corresponde a 50 antes de redondear. **No es una probabilidad de identidad ni una precisión validada.** El resultado se decide con la distancia completa; el redondeo visual no determina aceptación. Distancia, umbral, fórmula y vectores quedan en la administración. La API de verificación pública omite los datos técnicos, incluso para la cuenta administradora; los endpoints técnicos exigen rol de administrador.
 
 ## Persistencia
 
 - D1: perfil, consentimiento versionado, descriptor, sesiones QR, límites, pausas y auditoría.
-- R2: una foto de referencia por perfil y el avatar administrativo opcional. Las fotos de verificación no se almacenan.
+- R2: una foto de referencia por perfil y el avatar administrativo opcional. Las fotos de verificación no se almacenan en el servidor.
 - Los perfiles son únicos por cliente + tipo y número de documento normalizados; el índice almacena una clave hash. Reintentos con el mismo identificador son idempotentes.
 - Actualizar la referencia requiere autorización administrativa previa. Se escribe una nueva revisión antes de reemplazar el puntero y eliminar la anterior; pueden coexistir dos archivos durante la operación. Fallos de limpieza devuelven `cleanupPending`; todavía no hay reconciliador automático.
 - Los registros anteriores con tres referencias siguen funcionando usando la primera. El administrador dispone de «Conservar solo 1 foto» para borrar las otras dos sin perder los datos personales. No se borran esas fotos automáticamente al desplegar.
@@ -60,3 +60,9 @@ npm run dev
 ```
 
 Las pruebas usan SQLite real y un almacén de objetos de prueba. Cubren registro de una foto, rechazo de fotos extra, formulario tras la captura, cancelación, comparación fresca, descartado, porcentajes sin datos técnicos públicos, autorización, QR, límites, actualización y reducción de referencias antiguas. No miden precisión biométrica ni sustituyen pruebas con cámara real.
+
+## Evidencia visible y repetición
+
+La pantalla distingue foto 1 de registro, foto 2 nueva y resultado. El botón de la segunda foto ocupa el mismo grupo de controles debajo del video. Al terminar se apaga la cámara, se eliminan las indicaciones de captura activa y aparece «Hacer otra comparación», que requiere una nueva captura y conserva los contadores del servidor.
+
+Al verificar un registro existente, la referencia se muestra solo después de una coincidencia mediante un endpoint ligado al actor, intento exitoso, archivo exacto utilizado y vigencia de cinco minutos. Un registro modificado, otra persona o un intento fallido no permiten descargar esa evidencia. Las miniaturas se muestran solo en la sesión actual; no se crea una galería persistente de comparaciones.
