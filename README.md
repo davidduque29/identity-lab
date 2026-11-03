@@ -38,6 +38,14 @@ Los registros previos de ChatGPT Sites no se han exportado ni migrado. Permanece
 
 ## Desarrollo
 
+### Documentación por rol
+
+`documentation.html` aparece junto a Mi historial. El catálogo y las descargas se validan en el servidor: una cuenta confirmada ve las guías de usuario y el administrador ve además sus manuales. Los visitantes deben iniciar sesión. La sección de usuario comienza vacía hasta publicar sus guías.
+
+El catálogo privado está en `identity_private.configuration`, clave `identity-lab-david:documentation`. Cada entrada contiene `id`, `audience` (`admin` o `user`), `title`, `description`, `version`, `updatedAt` (ISO), `filename`, `contentType` y `size` (bytes). El documento correspondiente usa la clave `identity-lab-david:document:<id>` con un objeto `{ "content": "<base64>" }`. Para estos manuales pequeños se reutiliza la configuración privada; publicar primero el archivo completo y comprobar su integridad antes de añadir la entrada al catálogo. Para una biblioteca grande, mover los bytes a Storage privado manteniendo el contrato de autorización.
+
+`GET action=documentation` devuelve solo metadatos permitidos. `GET action=documentation-file&id=...` comprueba de nuevo el rol y devuelve el archivo como adjunto sin caché. Los manuales, sus bytes y enlaces de Drive no se guardan en el repositorio público ni en Pages. El documento publicado es una copia descargable de la versión proporcionada; los cambios posteriores en Drive no se sincronizan automáticamente y no se cambian sus permisos de origen.
+
 Node 24 y Python 3:
 
 ```sh

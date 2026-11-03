@@ -93,6 +93,106 @@ function harness() {
   }
   return { sql, objects, call, env };
 }
+
+function seedManual(h, audience, id = audience + '-manual') {
+  const file = Buffer.from('PK-test-manual');
+  const document = {
+    id,
+    audience,
+    title: 'Manual ' + audience,
+    description: 'Guía de prueba',
+    version: '1',
+    updatedAt: '2026-11-03T12:00:00Z',
+    size: file.length,
+    filename: id + '.docx',
+    contentType:
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  };
+  const current = h.sql
+    .prepare('SELECT payload FROM configuration WHERE key=?')
+    .get('identity-lab-david:documentation');
+  const catalog = current ? JSON.parse(current.payload) : [];
+  catalog.push(document);
+  const insert = h.sql.prepare(
+    'INSERT INTO configuration (key,payload) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET payload=excluded.payload',
+  );
+  insert.run('identity-lab-david:documentation', JSON.stringify(catalog));
+  insert.run(
+    'identity-lab-david:document:' + id,
+    JSON.stringify({ content: file.toString('base64') }),
+  );
+  return { document, file };
+}
+
+test('documentation filters the server catalog by role and never returns manual contents', async () => {
+  const h = harness();
+  h.env.AUTHENTICATED_ACCOUNT = true;
+  seedManual(h, 'admin');
+  seedManual(h, 'user');
+  seedManual(h, 'unexpected');
+  const admin = await h.call('documentation');
+  assert.deepEqual(
+    admin.content.documents.map((d) => d.id),
+    ['admin-manual', 'user-manual'],
+  );
+  assert.equal(admin.content.documents[0].content, undefined);
+  const user = await h.call('documentation', undefined, { email: 'user@example.test' });
+  assert.deepEqual(
+    user.content.documents.map((d) => d.id),
+    ['user-manual'],
+  );
+  assert.equal(JSON.stringify(user.content).includes('admin-manual'), false);
+  h.env.AUTHENTICATED_ACCOUNT = false;
+  assert.equal((await h.call('documentation')).status, 401);
+});
+
+test('manual downloads enforce role even for a guessed ID or forged query role', async () => {
+  const h = harness();
+  h.env.AUTHENTICATED_ACCOUNT = true;
+  const { file } = seedManual(h, 'admin');
+  assert.equal(
+    (
+      await h.call('documentation-file&id=admin-manual&admin=true', undefined, {
+        email: 'user@example.test',
+      })
+    ).status,
+    404,
+  );
+  assert.equal((await h.call('documentation-file&id=../admin-email')).status, 404);
+  const headers = {
+    'oai-authenticated-user-id': 'admin',
+    'oai-authenticated-user-email': 'admin@example.test',
+  };
+  const response = await handleLab(
+    new Request('https://lab.test/api/lab?action=documentation-file&id=admin-manual', {
+      headers,
+    }),
+    h.env,
+  );
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('Cache-Control'), 'private, no-store');
+  assert.match(
+    response.headers.get('Content-Disposition'),
+    /attachment; filename="admin-manual.docx"/,
+  );
+  assert.deepEqual(Buffer.from(await response.arrayBuffer()), file);
+  h.env.AUTHENTICATED_ACCOUNT = false;
+  assert.equal((await h.call('documentation-file&id=admin-manual')).status, 401);
+});
+
+test('empty documentation works and incomplete files cannot be downloaded', async () => {
+  const h = harness();
+  h.env.AUTHENTICATED_ACCOUNT = true;
+  assert.deepEqual((await h.call('documentation')).content.documents, []);
+  seedManual(h, 'admin');
+  h.sql
+    .prepare('UPDATE configuration SET payload=? WHERE key=?')
+    .run(
+      JSON.stringify({ content: Buffer.from('short').toString('base64') }),
+      'identity-lab-david:document:admin-manual',
+    );
+  assert.equal((await h.call('documentation-file&id=admin-manual')).status, 503);
+});
 const vec = (n) => Array(128).fill(n);
 const registration = (overrides = {}) => ({
   requestId: crypto.randomUUID(),

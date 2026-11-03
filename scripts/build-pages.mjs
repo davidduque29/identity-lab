@@ -38,7 +38,13 @@ await writeFile(resolve(out, 'sw.js'), worker.replace('__BUILD_VERSION__', build
 // Backend code lives exclusively in Supabase. GitHub Pages publishes only these assets.
 const shared = resolve(root, 'supabase/functions/identity-api/shared');
 await mkdir(shared, { recursive: true });
-for (const file of ['lab.mjs', 'domain.mjs', 'storage.mjs', 'network-context.mjs']) {
+for (const file of [
+  'lab.mjs',
+  'domain.mjs',
+  'storage.mjs',
+  'network-context.mjs',
+  'documentation.mjs',
+]) {
   await cp(resolve(root, 'server', file), resolve(shared, file));
 }
 await writeFile(

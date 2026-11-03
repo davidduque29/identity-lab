@@ -12,6 +12,7 @@ import {
 } from './domain.mjs';
 import { storageFor } from './storage.mjs';
 import { getNetworkContext } from './network-context.mjs';
+import { serveDocumentation } from './documentation.mjs';
 import QRCode from 'qrcode';
 
 const TENANT = 'identity-lab-david';
@@ -124,6 +125,14 @@ export async function handleLab(request, env) {
       return p;
     };
     if (request.method === 'GET') {
+      if (['documentation', 'documentation-file'].includes(action))
+        return await serveDocumentation({
+          request,
+          db,
+          tenant: TENANT,
+          admin,
+          member: !!env.AUTHENTICATED_ACCOUNT,
+        });
       if (action === 'context') {
         const avatar = admin
           ? await one('SELECT payload FROM configuration WHERE key=?', TENANT + ':avatar')

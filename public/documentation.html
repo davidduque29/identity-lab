@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Documentación · Identity Lab</title>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="portal.css" />
+    <link rel="stylesheet" href="my-history.css" />
+    <link rel="stylesheet" href="documentation.css" />
+    <script src="deployment-config.js"></script>
+    <script defer src="transport.js"></script>
+    <script defer src="documentation.js"></script>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <meta name="theme-color" content="#245f4d" />
+  </head>
+  <body class="documentation-page">
+    <header>
+      <a class="brand" href="portal.html"
+        ><span class="logo">◈</span> identity<span>lab</span></a
+      >
+      <nav class="documentation-nav" aria-label="Mi espacio">
+        <a class="member-access" href="my-history.html">👤 Mi historial</a>
+        <a
+          class="member-access documentation-access"
+          href="documentation.html"
+          aria-current="page"
+          ><svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+              d="M12 5c-3-2-6-2-9-1v15c3-1 6-1 9 1m0-15c3-2 6-2 9-1v15c-3-1-6-1-9 1V5Z"
+            /></svg
+          >Documentación</a
+        >
+      </nav>
+      <a class="back-to-lab" href="portal.html">← Volver al laboratorio</a>
+    </header>
+    <main class="documentation-shell">
+      <section class="documentation-hero">
+        <span class="documentation-emblem" aria-hidden="true">▤</span>
+        <div>
+          <p class="eyebrow">CENTRO DE AYUDA</p>
+          <h1>Documentación</h1>
+          <p>Manuales para aprender a usar Identity Lab y administrar tu acceso.</p>
+          <p id="documentationAccount" class="documentation-identity">
+            Comprobando tu sesión…
+          </p>
+        </div>
+      </section>
+      <p
+        id="documentationStatus"
+        class="documentation-status"
+        role="status"
+        aria-live="polite"
+      >
+        Cargando los manuales de tu cuenta…
+      </p>
+      <div id="documentationSignIn" class="panel documentation-signin" hidden>
+        <h2>Entra para consultar tus manuales</h2>
+        <p>La documentación disponible depende de los permisos de tu cuenta.</p>
+        <div class="button-row">
+          <a class="primary link-button" href="user-access.html">Entrar con mi cuenta</a
+          ><a class="secondary link-button" href="admin-login.html"
+            >Acceso administrativo</a
+          >
+        </div>
+      </div>
+      <div id="documentationContent" hidden>
+        <div class="documentation-toolbar">
+          <label for="documentationSearch"
+            >Buscar un manual<input
+              id="documentationSearch"
+              type="search"
+              placeholder="Título o palabra clave" /></label
+          ><button id="documentationReload" class="secondary" type="button">
+            Actualizar
+          </button>
+        </div>
+        <section
+          class="documentation-section"
+          id="adminDocumentation"
+          hidden
+          aria-labelledby="adminDocumentationTitle"
+        >
+          <div class="documentation-section-heading">
+            <h2 id="adminDocumentationTitle">Manuales del administrador</h2>
+            <span class="documentation-role">Acceso administrativo</span>
+          </div>
+          <div id="adminManuals" class="documentation-grid"></div>
+        </section>
+        <section class="documentation-section" aria-labelledby="userDocumentationTitle">
+          <div class="documentation-section-heading">
+            <h2 id="userDocumentationTitle">Manuales del usuario</h2>
+            <span class="documentation-role user-role">Mi cuenta</span>
+          </div>
+          <div id="userManuals" class="documentation-grid"></div>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>
