@@ -3,6 +3,22 @@
   const config = window.IDENTITY_DEPLOYMENT;
   const prefix = 'identity-lab:';
   let pending;
+  // The email may return to the site root or portal, not only the login page.
+  const callback = new URLSearchParams(location.hash.slice(1));
+  if (callback.get('access_token') && callback.get('refresh_token')) {
+    localStorage.setItem(
+      prefix + 'admin',
+      JSON.stringify({
+        access_token: callback.get('access_token'),
+        refresh_token: callback.get('refresh_token'),
+        expires_at:
+          Math.floor(Date.now() / 1000) + Number(callback.get('expires_in') || 3600),
+      }),
+    );
+    history.replaceState(null, '', location.pathname);
+    location.replace('portal.html#administracion');
+  }
+
   async function credentials() {
     const admin = JSON.parse(localStorage.getItem(prefix + 'admin') || 'null');
     if (admin && admin.expires_at > Date.now() / 1000 + 60) return admin.access_token;

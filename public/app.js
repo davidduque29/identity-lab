@@ -767,6 +767,27 @@ function stop({ completed = false, registered = false } = {}) {
   busy = false;
   controls();
 }
+function syncCameraGeometry() {
+  const video = $('video');
+  if (!video.videoWidth || !video.videoHeight) return;
+  if (video.parentElement) {
+    video.parentElement.style.aspectRatio = video.videoWidth + ' / ' + video.videoHeight;
+  }
+  $('alignmentGuide').setAttribute(
+    'viewBox',
+    '0 0 ' + video.videoWidth + ' ' + video.videoHeight,
+  );
+  const ellipse = $('guideEllipse');
+  ellipse.setAttribute('cx', video.videoWidth / 2);
+  ellipse.setAttribute('cy', video.videoHeight / 2);
+  ellipse.setAttribute(
+    'rx',
+    Math.min(video.videoWidth * 0.23, video.videoHeight * 0.31 * 0.7),
+  );
+  ellipse.setAttribute('ry', video.videoHeight * 0.31);
+}
+$('video').addEventListener('resize', syncCameraGeometry);
+
 async function start() {
   if (busy || stream) return;
   if (!$('consent').checked) {
@@ -809,19 +830,7 @@ async function start() {
     $('video').srcObject = stream;
     await $('video').play();
     if (token !== generation) return;
-    const video = $('video'),
-      ellipse = $('guideEllipse');
-    $('alignmentGuide').setAttribute(
-      'viewBox',
-      '0 0 ' + video.videoWidth + ' ' + video.videoHeight,
-    );
-    ellipse.setAttribute('cx', video.videoWidth / 2);
-    ellipse.setAttribute('cy', video.videoHeight / 2);
-    ellipse.setAttribute(
-      'rx',
-      Math.min(video.videoWidth * 0.23, video.videoHeight * 0.31 * 0.7),
-    );
-    ellipse.setAttribute('ry', video.videoHeight * 0.31);
+    syncCameraGeometry();
     $('empty').style.display = 'none';
     $('cameraStatus').textContent = 'Cámara activa';
     autoCaptureMode = comparison ? 'comparison' : 'reference';

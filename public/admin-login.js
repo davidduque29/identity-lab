@@ -58,6 +58,25 @@
       }).catch(() => {});
     status.textContent = 'Sesión administrativa cerrada.';
   }
+  if (
+    location.hash !== '#salir' &&
+    localStorage.getItem('identity-lab:admin') &&
+    window.IdentityTransport
+  ) {
+    status.textContent = 'Comprobando tu sesión administrativa…';
+    window.IdentityTransport.fetch('/api/lab?action=context')
+      .then(async (response) => {
+        const context = await response.json();
+        if (response.ok && context.admin) location.replace('portal.html#administracion');
+        else
+          status.textContent = response.ok
+            ? 'Esta sesión no tiene permisos administrativos. Usa el correo autorizado.'
+            : 'No se pudo validar tu sesión. Puedes solicitar un enlace nuevo.';
+      })
+      .catch(() => {
+        status.textContent = 'No se pudo comprobar tu sesión. Revisa la conexión.';
+      });
+  }
   document.getElementById('login').onsubmit = async (event) => {
     event.preventDefault();
     const button = document.getElementById('submit');
@@ -89,7 +108,7 @@
       if (!response.ok)
         throw new Error(
           response.status === 429
-            ? 'Se alcanzó el límite de envíos. Espera unos minutos antes de volver a solicitar el acceso.'
+            ? 'Supabase alcanzó el límite temporal de envíos de correo. Recargar o solicitar más enlaces no elimina la pausa. Intenta más tarde y usa únicamente el correo más reciente.'
             : result.msg || result.message || 'No se pudo completar el acceso.',
         );
       if (codeMode) {

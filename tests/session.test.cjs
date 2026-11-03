@@ -570,3 +570,20 @@ test('expired QR still blocks capture with a clear recovery instruction', async 
   assert.equal(h.context.window.IdentityWorkflow.ready(), false);
   assert.match(h.get('workflowStatus').textContent, /QR venció/);
 });
+
+test('portrait camera and rotation keep the viewport and oval in the same coordinate system', () => {
+  const h = createHarness();
+  vm.runInContext(
+    "$('video').videoWidth=480; $('video').videoHeight=640; $('video').parentElement={style:{}}; syncCameraGeometry()",
+    h.context,
+  );
+  assert.equal(h.nodes.get('video').parentElement.style.aspectRatio, '480 / 640');
+  assert.equal(h.nodes.get('alignmentGuide').attributes.viewBox, '0 0 480 640');
+  assert.equal(h.nodes.get('guideEllipse').attributes.cx, 240);
+  vm.runInContext(
+    "$('video').videoWidth=640; $('video').videoHeight=480; syncCameraGeometry()",
+    h.context,
+  );
+  assert.equal(h.nodes.get('video').parentElement.style.aspectRatio, '640 / 480');
+  assert.equal(h.nodes.get('alignmentGuide').attributes.viewBox, '0 0 640 480');
+});
