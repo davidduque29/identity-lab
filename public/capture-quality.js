@@ -11,19 +11,19 @@
       return fail('invalid', 'No pude medir tu rostro. Mira de frente.');
     if (b.x < 0.02 || b.y < 0.02 || b.x + b.width > 0.98 || b.y + b.height > 0.98)
       return fail('cropped', 'Tu rostro está cortado. Aléjate un poco y céntralo.');
-    if (b.width > 0.58 || b.height > 0.85)
+    if (b.width > 0.5 || b.height > 0.76)
       return fail('too-close', 'Aléjate un poco de la cámara.');
     if (b.width < 0.28 || b.height < 0.36)
       return fail('too-far', 'Acércate un poco a la cámara.');
     const cx = b.x + b.width / 2,
       cy = b.y + b.height / 2;
-    if (cx < 0.4)
+    if (cx < 0.43)
       return fail('left', 'Muévete hacia la izquierda de la imagen para centrarte.');
-    if (cx > 0.6)
+    if (cx > 0.57)
       return fail('right', 'Muévete hacia la derecha de la imagen para centrarte.');
-    if (cy < 0.38)
+    if (cy < 0.4)
       return fail('high', 'Baja un poco el rostro o ajusta la cámara hacia arriba.');
-    if (cy > 0.62)
+    if (cy > 0.6)
       return fail('low', 'Sube un poco el rostro o ajusta la cámara hacia abajo.');
     if (!Number.isFinite(m.roll) || !Number.isFinite(m.yaw))
       return fail(

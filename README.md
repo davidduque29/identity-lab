@@ -1,63 +1,57 @@
 # Identity Lab
 
-Laboratorio de captura y cotejo facial con face-api.js 0.22.2. El inicio es `/portal.html`; `/index.html` conserva el experimento local y `?flow=register` / `?flow=verify` activan el flujo persistente.
+Demo de registro y cotejo facial con face-api.js 0.22.2. Todas las entradas de captura (`/`, `/index.html` y `?flow=register`) activan el registro completo: ya no existe una entrada pública que omita el formulario y registre solamente en memoria. `/portal.html` ofrece QR, verificación y administración.
 
-## Flujo
+## Flujo de la persona
 
-1. Una cuenta autorizada abre el portal y genera un QR de registro o verificación, o usa el mismo equipo.
-2. El QR contiene un token aleatorio en el fragmento del enlace, caduca y se reclama una sola vez. El servidor almacena su hash. El celular debe tener acceso al Site; el QR no cambia permisos de Sites.
-3. La primera referencia aceptada abre el formulario de datos y consentimiento. Después se toman las otras dos fotos, con encuadre validado. El guardado se confirma únicamente al completar las tres muestras y la escritura persistente.
-4. Tipo y número de documento normalizados producen una clave única por cliente. Reintentos con el mismo identificador no crean otro registro.
-5. La verificación selecciona un registro accesible a la cuenta, toma una foto nueva y envía solo su descriptor. El servidor calcula la media de las distancias contra las tres referencias y decide con su propia configuración. La foto temporal se descarta, incluso si ocurre un error.
-6. Una coincidencia muestra los datos en el celular o equipo donde se capturó. El computador que generó el QR solo recibe el estado; no recibe fotos ni datos personales por el canal de seguimiento.
+1. Autoriza la cámara y espera el contorno verde. Las instrucciones se muestran sobre la vista, antes del fotograma, y dentro de él.
+2. Toma **una sola foto**. Cada fotograma se valida por tamaño, posición, pose e iluminación. La guía usa un óvalo más estrecho con coordenadas acordes a la resolución real del video.
+3. La foto aceptada abre un formulario con miniatura, nombre, segundo nombre opcional, apellidos, nacimiento, documento, dirección y consentimiento. Confirmar los datos guarda la foto y el perfil. Cancelar descarta la foto temporal.
+4. «Continuar y verificar mi rostro» habilita una nueva captura en la misma sesión. En otra visita se selecciona el documento desde el flujo de verificación.
+5. El servidor compara el descriptor nuevo con la única referencia. El usuario ve «Tu rostro coincide» o «No se confirmó la coincidencia» y un índice de similitud orientativo del 1 al 100%. Si coincide, aparecen los datos registrados. La foto de comparación se descarta siempre.
 
-## Persistencia y adaptadores
+El índice usa `round(100 × exp(-ln(2) × (distancia/umbral)^2))`, limitado a 1–100. El umbral corresponde a 50 antes de redondear. **No es una probabilidad de identidad ni una precisión validada.** El resultado se decide con la distancia completa; el redondeo visual no determina aceptación. Distancia, umbral, fórmula y vectores quedan en la administración. La API de verificación pública omite los datos técnicos, incluso para la cuenta administradora; los endpoints técnicos exigen rol de administrador.
 
-- D1: perfiles, consentimiento, plantillas versionadas, sesiones QR, reglas, contadores y auditoría.
-- R2: tres referencias por registro y la foto administrativa opcional, en rutas privadas con ID interno. No hay un endpoint público de fotos.
-- `server/storage.mjs`: puerto de archivos con adaptador funcional de Sites. `DriveStorage` informa explícitamente que falta habilitación; **no está conectado ni guarda en Drive**. El selector directo de avatar desde Drive tampoco está disponible; se puede descargar una imagen de Drive y subirla desde el equipo.
-- `server/domain.mjs`: validación, modelo/versionado, comparación y reglas independientes de HTTP y almacenamiento.
-- `server/lab.mjs`: servicio HTTP, autorización, operaciones SQL atómicas y orquestación.
-- `public/app.js`: adaptador del motor facial, encuadre y captura. `public/workflow.js`: formulario e integración del flujo persistente. `public/portal.js`: QR y administración.
+## Persistencia
 
-Los archivos se guardan mediante el puerto de almacenamiento; los contadores y las sesiones requieren persistencia transaccional. Cambiar el almacenamiento de archivos no migra los perfiles ni la base de datos operativa. Un destino nuevo requiere su implementación, permisos y migración; no basta con cambiar una etiqueta. Los datos y reglas están aislados por cliente en el esquema; esta publicación configura un único cliente. No incluye alta o gestión de múltiples clientes.
+- D1: perfil, consentimiento versionado, descriptor, sesiones QR, límites, pausas y auditoría.
+- R2: una foto de referencia por perfil y el avatar administrativo opcional. Las fotos de verificación no se almacenan.
+- Los perfiles son únicos por cliente + tipo y número de documento normalizados; el índice almacena una clave hash. Reintentos con el mismo identificador son idempotentes.
+- Actualizar la referencia requiere autorización administrativa previa. Se escribe una nueva revisión antes de reemplazar el puntero y eliminar la anterior; pueden coexistir dos archivos durante la operación. Fallos de limpieza devuelven `cleanupPending`; todavía no hay reconciliador automático.
+- Los registros anteriores con tres referencias siguen funcionando usando la primera. El administrador dispone de «Conservar solo 1 foto» para borrar las otras dos sin perder los datos personales. No se borran esas fotos automáticamente al desplegar.
 
-## Reglas y administración
+`server/storage.mjs` contiene el puerto de archivos y el adaptador de Sites. Drive **sigue pendiente de habilitación**; no se guarda en Drive ni hay selector directo de imágenes desde Drive. Las sesiones y contadores transaccionales permanecen en D1 aunque se cambie el adaptador de archivos. Cambiar de proveedor requiere implementación y migración; cambiar de modelo puede requerir nuevo registro.
 
-La variable de servidor `ADMIN_EMAIL` determina la cuenta administrativa; no se acepta un rol enviado por el navegador. Sites conserva además su política de acceso original.
+## Administración y permisos
 
-El panel permite listar perfiles, consultar datos, buscar en la página, ver eventos y sus IP, desbloquear con motivo, autorizar reemplazo de referencias, eliminar perfiles, elegir un avatar o subir una imagen recortada a 256×256. Los controles del servidor deniegan estas acciones a otros visitantes.
+`ADMIN_EMAIL` es una variable exclusiva del servidor que identifica al administrador. La política de acceso de Sites se conserva. Un QR es temporal, de un solo uso, ligado a la sesión y con hash persistido; no sustituye los permisos del Site.
 
-Valores iniciales: tres fallos consecutivos, pausa de 15 minutos, QR de cinco minutos, umbral de 0.50 y plazo de eventos de 90 días. Son configurables con límites. Las capturas rechazadas antes de comparar no incrementan fallos. Una coincidencia reinicia el contador. Cambiar reglas no acorta una pausa ya activa. La depuración de eventos vencidos se ejecuta mediante una acción explícita del administrador; no hay tarea automática programada.
+El panel lista personas y eventos; permite ver datos, foto y plantilla facial, desbloquear con motivo, autorizar actualización, reducir registros antiguos a una foto y eliminar perfiles. El avatar admite iconos o una imagen subida y recortada a 256×256, independiente de la biometría.
 
-La actualización de referencias exige autorización y reemplaza las tres muestras solo tras confirmar la escritura completa. Una operación fallida conserva las referencias previas. Los objetos nuevos se escriben en una revisión temporal antes de cambiar el puntero del registro: durante el reemplazo pueden coexistir temporalmente seis archivos. Si falla la limpieza posterior, el servidor devuelve `cleanupPending`; no hay reconciliador automático aún. El cliente informa esta situación al administrador. El registro activo mantiene tres referencias. La eliminación borra perfil, plantillas y fotos; conserva eventos sin nombre ni documento, solo ID interno y contexto de acceso, hasta su depuración.
+Valores iniciales configurables: tres fallos consecutivos, pausa de 15 minutos, QR de cinco minutos, umbral 0.50 y eventos durante 90 días. Las capturas rechazadas antes de comparar no cuentan como fallo. El servidor aplica el bloqueo; recargar la pantalla no lo reinicia. Una coincidencia reinicia el contador. Las pausas activas conservan su vencimiento si se cambia la configuración. La depuración de eventos vencidos requiere el botón administrativo; no hay tarea automática.
 
-## Límites de seguridad
+Las IP se guardan legibles desde los encabezados del borde confiable. `2800:…` es IPv6, **no texto cifrado**. Se etiqueta IPv4 o IPv6; una VPN/NAT o intermediario puede representar varios dispositivos. No prueba identidad ni ubicación exacta. No se usa un `X-Forwarded-For` aportado por el cliente.
 
-Es una demo: no tiene prueba de vida ni verificación del documento. Los vectores se extraen en el navegador y no constituyen evidencia resistente a un cliente manipulado. La autorización real de los datos depende del acceso de Sites y la cuenta/sesión, no de una autenticación biométrica de producción. Antes de usar con información sensible hacen falta inferencia o evidencia verificable en servidor, protección contra presentación y abuso, recuperación segura, cifrado y gestión de claves según el cliente, y evaluación de precisión y sesgos.
+## Límites del laboratorio
 
-La IP se obtiene de los encabezados del borde confiable, sin usar un `X-Forwarded-For` enviado por el cliente. Puede representar una VPN, NAT o intermediario; no prueba identidad ni ubicación exacta.
+No tiene prueba de vida, verificación documental ni evidencia resistente a un cliente manipulado. Los datos del formulario son declarados. El procesamiento del descriptor ocurre en el navegador; la comparación y los permisos, en servidor. La autorización real depende de la cuenta de Sites y su sesión. Antes de proteger datos sensibles hacen falta evidencia biométrica verificable en servidor, medidas contra presentación y abuso, recuperación segura y evaluación de precisión/sesgos.
 
-No se deben subir fotos, documentos, vectores reales, credenciales o estados locales al repositorio. La foto administrativa se guarda separada de la biometría.
+La publicación configura un solo cliente con datos y reglas separados por clave de cliente; no incluye un panel de alta de múltiples clientes. Ninguna foto, IP real, plantilla o credencial debe incluirse en Git.
 
-## Ejecutar y verificar
+## Desarrollo
 
-Requiere Node 24 (las pruebas de integración usan `node:sqlite`) y Python 3. Instala las dependencias y modelos verificados:
+Node 24 y Python 3:
 
 ```bash
 npm ci
 python scripts/download_assets.py
-```
-
-En un clon nuevo crea `.openai/hosting.json` a partir de `.openai/hosting.example.json`, sin reutilizar el identificador de otro Site. La publicación original conserva su propio identificador. Configura `ADMIN_EMAIL` únicamente como variable de servidor para el entorno autorizado. La ejecución local sin identidad debe responder 401; nunca habilites un bypass de identidad en producción.
-
-```bash
 npm test
-npm run db:generate
 npm run build
 ```
 
-Las migraciones generadas están en `drizzle/`. El despliegue de Sites aplica las migraciones en el servidor. Para un entorno local nuevo, aplica cada migración una sola vez con Wrangler y el archivo `dist/server/wrangler.json`, por ejemplo:
+En un clon nuevo, crear `.openai/hosting.json` desde `.openai/hosting.example.json`, sin copiar el identificador del Site original. Configurar `ADMIN_EMAIL` en el servidor. El entorno sin identidad válida responde 401; no habilitar bypass en producción.
+
+Las migraciones de `drizzle/` se aplican por Sites al publicar. Para una base local nueva, aplicar cada SQL una vez antes del servidor:
 
 ```bash
 node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0000_acoustic_hawkeye.sql
@@ -65,6 +59,4 @@ node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1
 npm run dev
 ```
 
-`python -m http.server 8000 --directory public` sirve únicamente el laboratorio local. QR, perfiles, administración y persistencia requieren el servidor Worker y una identidad válida de Sites.
-
-Las pruebas cubren encuadre, captura, cancelación, comparación, unicidad, idempotencia, pausas, permisos, QR y sustitución/eliminación con SQLite real y un almacén de objetos de prueba. No miden precisión biométrica ni sustituyen pruebas con cámaras y celulares reales.
+Las pruebas usan SQLite real y un almacén de objetos de prueba. Cubren registro de una foto, rechazo de fotos extra, formulario tras la captura, cancelación, comparación fresca, descartado, porcentajes sin datos técnicos públicos, autorización, QR, límites, actualización y reducción de referencias antiguas. No miden precisión biométrica ni sustituyen pruebas con cámara real.

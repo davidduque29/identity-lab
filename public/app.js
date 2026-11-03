@@ -87,7 +87,8 @@ function cameraFrame() {
 }
 
 function networkLabel(context) {
-  if (context?.status === 'observed' && context.ip) return context.ip;
+  if (context?.status === 'observed' && context.ip)
+    return (context.ip.includes(':') ? 'IPv6: ' : 'IPv4: ') + context.ip;
   if (context?.status === 'disabled') return 'No incluida';
   if (context?.status === 'proxy')
     return 'No disponible: el servidor observa un intermediario';
@@ -218,6 +219,7 @@ function setGuidance(message, state = 'waiting') {
   $('alignmentGuide').setAttribute('data-state', state);
   $('alignmentHint').setAttribute('data-state', state);
   $('alignmentHint').textContent = message;
+  $('cameraPrompt').textContent = message;
   $('alignmentLabel').textContent =
     state === 'ready'
       ? '✓ Listo para capturar'
@@ -231,7 +233,7 @@ function updateStage() {
     : !!references.length;
   $('captureStage').textContent = hasReference
     ? 'PASO 2 · FOTO NUEVA DE COMPARACIÓN'
-    : 'PASO 1 · TRES FOTOS DE REFERENCIA';
+    : 'PASO 1 · UNA FOTO DE REFERENCIA';
   $('registerStep').setAttribute('data-active', String(!hasReference));
   $('compareStep').setAttribute('data-active', String(hasReference));
 }
@@ -294,7 +296,7 @@ async function prepareCapture(kind, token) {
   controls();
   $('captureStage').textContent =
     kind === 'reference'
-      ? 'PASO 1 · PREPARANDO TRES REFERENCIAS'
+      ? 'PASO 1 · PREPARANDO UNA REFERENCIA'
       : 'PASO 2 · PREPARANDO UNA FOTO NUEVA';
   try {
     for (let number = 3; number >= 1; number--) {
@@ -308,7 +310,7 @@ async function prepareCapture(kind, token) {
       $('countdown').textContent = String(number);
       setGuidance(
         (kind === 'reference'
-          ? 'Registro: tomaremos 3 fotos de referencia'
+          ? 'Registro: tomaremos una foto de referencia'
           : 'Comparación: tomaremos 1 foto NUEVA') +
           ' en ' +
           number +
@@ -317,7 +319,7 @@ async function prepareCapture(kind, token) {
       );
       status(
         kind === 'reference'
-          ? 'Cuenta regresiva para registrar tus tres referencias.'
+          ? 'Cuenta regresiva para registrar tu foto de referencia.'
           : 'Cuenta regresiva para una NUEVA captura de comparación.',
       );
       await wait(1000);
@@ -466,7 +468,7 @@ function renderInspection() {
       el(
         'p',
         'gallery-empty',
-        'Al registrar tu rostro aparecerán aquí las tres fotos exactas utilizadas como referencia.',
+        'Al registrar tu rostro aparecerán aquí la foto exacta utilizada como referencia.',
       ),
     );
   references.forEach((sample, i) =>
@@ -488,7 +490,7 @@ function renderInspection() {
   else {
     comparison.append(sampleCard(a.sample, 'Captura del intento ' + a.number));
     const calculation = el('div', 'calculation');
-    calculation.append(el('h3', '', 'Esta captura frente a tus 3 referencias'));
+    calculation.append(el('h3', '', 'Esta captura frente a tu referencia'));
     const table = el('table', 'distance-table');
     const head = el('thead'),
       tr = el('tr');
@@ -512,7 +514,9 @@ function renderInspection() {
         'formula',
         '(' +
           a.distances.map((d) => d.toFixed(6)).join(' + ') +
-          ') / 3 = ' +
+          ') / ' +
+          a.distances.length +
+          ' = ' +
           a.mean.toFixed(6),
       ),
     );
@@ -582,8 +586,12 @@ function status(message) {
 }
 function controls() {
   const ready =
-    !!stream && !busy && captureReady && Date.now() - lastAssessmentAt <= 2500;
-  $('start').disabled = busy || !!stream;
+    !!window.IdentityWorkflow &&
+    !!stream &&
+    !busy &&
+    captureReady &&
+    Date.now() - lastAssessmentAt <= 2500;
+  $('start').disabled = busy || !!stream || !window.IdentityWorkflow;
   $('stop').disabled = !stream;
   $('captureHere').disabled =
     !ready ||
@@ -604,8 +612,8 @@ function controls() {
   $('captureHere').textContent = busy
     ? 'Captura en curso…'
     : references.length
-      ? '1. Repetir las 3 referencias'
-      : '1. Capturar 3 fotos de referencia';
+      ? '1. Actualizar mi referencia'
+      : '1. Tomar mi foto de registro';
   $('captureHere').className = references.length ? 'secondary' : 'primary';
   $('compareHere').className = references.length ? 'primary' : 'secondary';
   $('compareHere').textContent = busy
@@ -616,25 +624,47 @@ function controls() {
 function result(title, body, kind = '', distance) {
   $('result').className = 'result ' + kind;
   $('result').replaceChildren(el('span', 'eyebrow', 'RESULTADO'), el('h3', '', title));
-  if (distance !== undefined) $('result').append(el('strong', '', distance.toFixed(3)));
+  if (distance !== undefined)
+    $('result').append(
+      el('strong', '', similarityDisplay(distance, Number($('threshold').value)) + '%'),
+    );
   $('result').append(el('p', '', body));
 }
-function showAttempt(a) {
-  result(
-    (a.match ? 'Coincidencia' : 'Sin coincidencia') + ' · intento ' + a.number,
-    'Distancia media: ' +
-      a.mean.toFixed(3) +
-      ' · Umbral usado: ' +
-      a.threshold.toFixed(2) +
-      '. Consulta las fotos y el cálculo más abajo. No verifica presencia real.',
-    a.match ? 'success' : 'fail',
-    a.mean,
+function similarityDisplay(distance, threshold) {
+  return Math.max(
+    1,
+    Math.min(100, Math.round(100 * Math.exp(-Math.LN2 * (distance / threshold) ** 2))),
   );
+}
+function showUserResult(match, similarity, remaining) {
+  const root = $('result');
+  root.className = 'result ' + (match ? 'success' : 'fail');
+  root.replaceChildren(
+    el('span', 'eyebrow', 'RESULTADO'),
+    el(
+      'h3',
+      '',
+      match ? 'Tu rostro coincide con el registro' : 'No se confirmó la coincidencia',
+    ),
+    el('strong', 'similarity-score', similarity + '%'),
+  );
+  const bar = el('div', 'similarity-track'),
+    fill = el('span', 'similarity-fill');
+  fill.style.width = similarity + '%';
+  bar.append(fill);
+  bar.setAttribute('aria-hidden', 'true');
+  root.append(bar);
+  root.append(el('p', '', 'Similitud orientativa. No es una probabilidad de identidad.'));
+  if (!match && remaining !== undefined)
+    root.append(el('p', '', 'Intentos restantes: ' + remaining));
+}
+function showAttempt(a) {
+  showUserResult(a.match, similarityDisplay(a.mean, a.threshold));
 }
 function stop() {
   if (busy)
     showCaptureProgress(
-      ['retry', 'retry', 'retry'],
+      ['retry'],
       'Registro o comparación interrumpidos. Repite la operación; el registro previo, si existe, se conserva.',
       true,
     );
@@ -694,8 +724,11 @@ async function start() {
     );
     ellipse.setAttribute('cx', video.videoWidth / 2);
     ellipse.setAttribute('cy', video.videoHeight / 2);
-    ellipse.setAttribute('rx', video.videoWidth * 0.28);
-    ellipse.setAttribute('ry', video.videoHeight * 0.42);
+    ellipse.setAttribute(
+      'rx',
+      Math.min(video.videoWidth * 0.23, video.videoHeight * 0.31 * 0.7),
+    );
+    ellipse.setAttribute('ry', video.videoHeight * 0.31);
     $('empty').style.display = 'none';
     $('cameraStatus').textContent = 'Cámara activa';
     status('Coloca tu rostro en el óvalo. Espera el contorno verde para capturar.');
@@ -722,200 +755,80 @@ async function start() {
   }
 }
 async function enroll() {
+  if (!window.IdentityWorkflow) {
+    status('No se pudo preparar el registro. Recarga la página para continuar.');
+    return;
+  }
   if (busy || !stream) return;
   if (
-    !!window.IdentityWorkflow &&
+    window.IdentityWorkflow &&
     (!window.IdentityWorkflow.ready() ||
       window.IdentityWorkflow.mode !== 'register' ||
       references.length)
   )
     return;
-  const token = generation,
-    samples = [];
-  let committed = false;
+  const token = generation;
+  let sample = null,
+    committed = false;
   if (!(await prepareCapture('reference', token))) {
     finishCapture(token);
     return;
   }
-  $('captureFeedback').hidden = true;
-  let captureIndex = 0;
-  const progress = ['pending', 'pending', 'pending'];
-  showCaptureProgress(progress, 'Registro iniciado: prepararemos tres referencias.');
   try {
-    for (let i = 0; i < 3; i++) {
-      captureIndex = i;
-      progress[i] = 'taking';
-      showCaptureProgress(progress, 'Tomando la foto ' + (i + 1) + ' de 3…');
-      status('Registrando muestra ' + (i + 1) + ' de 3. Mantén el rostro centrado…');
-      const sample = await adapter.capture();
-      samples.push(sample);
+    showCaptureProgress(['taking'], 'Tomando tu única foto de referencia…');
+    sample = await adapter.capture();
+    if (token !== generation) return;
+    showCaptureProgress(
+      ['taken'],
+      'Foto aceptada. Completa tus datos para confirmar el registro.',
+    );
+    captureFlash('✓ Foto aceptada. No necesitas otra toma para registrarte.');
+    if (window.IdentityWorkflow) {
+      await window.IdentityWorkflow.afterFirstSample(sample);
       if (token !== generation) return;
-      progress[i] = 'taken';
-      showCaptureProgress(
-        progress,
-        i === 0
-          ? 'Primera foto tomada correctamente. Faltan las fotos 2 y 3.'
-          : 'Foto ' + (i + 1) + ' tomada correctamente.',
-      );
-      if (i === 0 && window.IdentityWorkflow) {
-        await window.IdentityWorkflow.afterFirstSample();
-        if (token !== generation) return;
-        const deadline = Date.now() + 30000;
-        for (let n = 3; n >= 1; n--) {
-          let assessment = await adapter.assess();
-          while (!assessment.ready) {
-            if (Date.now() > deadline)
-              throw new Error(
-                'No se recuperó un encuadre adecuado. Repite las tres tomas.',
-              );
-            setGuidance(assessment.message);
-            status(assessment.message + ' La cuenta regresiva está en pausa.');
-            await wait(400);
-            if (token !== generation) return;
-            assessment = await adapter.assess();
-          }
-          setGuidance('Encuadre adecuado. Preparando las otras dos fotos…', 'capturing');
-          $('countdown').hidden = false;
-          $('countdown').textContent = String(n);
-          status(
-            'Mira de nuevo a la cámara. Las referencias 2 y 3 se tomarán en ' + n + '…',
-          );
-          await wait(1000);
-          if (token !== generation) return;
-        }
-        $('countdown').hidden = true;
-      }
-      renderNetworkContext(sample.network);
-      captureFlash('✓ Referencia ' + (i + 1) + ' de 3 capturada');
-      setGuidance(
-        'Referencia ' + (i + 1) + '/3 capturada. Mantente quieto.',
-        'capturing',
-      );
-      await wait(500);
+      await window.IdentityWorkflow.save([sample]);
       if (token !== generation) return;
     }
-    if (window.IdentityWorkflow) await window.IdentityWorkflow.save(samples);
-    if (token !== generation) return;
     clearAttempts();
     references.forEach(disposeSample);
-    references = samples;
+    references = [sample];
     committed = true;
-    showCaptureProgress(
-      ['taken', 'taken', 'taken'],
-      'Las tres fotos fueron tomadas y registradas. No necesitas repetirlas.',
-    );
-    $('reference').textContent = window.IdentityWorkflow
-      ? '✓ Registro persistente guardado · 3 fotos y 3 vectores'
-      : '✓ Referencia activa · 3 fotos y 3 vectores · solo en memoria';
-    result(
-      'Referencia registrada',
-      window.IdentityWorkflow
-        ? 'Las tres referencias quedaron guardadas. Vuelve al inicio y elige «Verificar mi rostro» para una captura nueva.'
-        : 'Puedes ver las tres fotos en «Fotos y comparación» y realizar una captura nueva.',
-    );
+    $('reference').textContent = '✓ Registro confirmado · una foto de referencia';
+    showCaptureProgress(['taken'], 'Registro completo: una única foto aceptada.');
+    $('referencePreview').src = sample.image;
+    $('referencePreview').hidden = false;
     renderInspection();
-    captureFlash(
-      window.IdentityWorkflow
-        ? '✓ Registro guardado. Vuelve al inicio para verificar.'
-        : '✓ Registro terminado: 3 referencias. Siguiente: toma una foto NUEVA.',
+    renderNetworkContext(sample.network);
+    result(
+      'Registro completado',
+      'Tu foto y tus datos están preparados. Selecciona «Continuar y verificar mi rostro».',
     );
     status(
-      window.IdentityWorkflow
-        ? 'REGISTRO GUARDADO. Vuelve al inicio y selecciona «Verificar mi rostro».'
-        : 'PASO 1 COMPLETO. Ya tienes 3 referencias. Para comparar, pulsa «2. Tomar una foto NUEVA y comparar»: habrá otra cuenta regresiva.',
+      'Registro completo. El siguiente paso usa una foto NUEVA para verificar tu rostro.',
     );
-    log(
-      window.IdentityWorkflow
-        ? 'Registro persistente guardado: 3 fotos y sus vectores.'
-        : 'Referencia registrada: 3 fotos y sus vectores de 128 valores, solo en memoria.',
-    );
+    log('Referencia única confirmada.');
   } catch (e) {
     if (token === generation) {
       window.IdentityWorkflow?.onError(e);
       status(e.message);
-      const state = progress.map((_, i) => (i < samples.length ? 'cancelled' : 'retry'));
-      const message =
-        'La foto ' +
-        (captureIndex + 1) +
-        ' no se pudo aceptar. ' +
-        (samples.length
-          ? 'Se tomaron ' +
-            samples.length +
-            ' foto(s), pero se descartarán porque el registro está incompleto. '
-          : 'No se guardó ninguna foto nueva. ') +
-        'Repite las tres tomas cuando el contorno esté verde.' +
-        (references.length ? ' Tu registro anterior sigue activo.' : '');
-      showCaptureProgress(state, message, true);
-      result('Debes repetir el registro', message + ' ' + e.message, 'fail');
-      log('Registro incompleto: ' + e.message);
-    }
-  } finally {
-    if (!committed) samples.forEach(disposeSample);
-    finishCapture(token);
-  }
-}
-async function verify() {
-  if (window.IdentityWorkflow) return verifyPersistent();
-  if (busy || !stream || !references.length) return;
-  const token = generation,
-    threshold = Number($('threshold').value);
-  let sample = null,
-    committed = false;
-  if (!(await prepareCapture('comparison', token))) {
-    finishCapture(token);
-    return;
-  }
-  $('captureFeedback').hidden = true;
-  try {
-    status('Analizando una captura nueva…');
-    sample = await adapter.capture();
-    if (token !== generation) return;
-    const distances = references.map((ref) =>
-      adapter.distance(ref.descriptor, sample.descriptor),
-    );
-    const mean = distances.reduce((a, b) => a + b, 0) / distances.length;
-    const attempt = {
-      number: ++attemptNumber,
-      sample,
-      distances,
-      mean,
-      threshold,
-      match: mean <= threshold,
-    };
-    closePhoto();
-    attempts.unshift(attempt);
-    if (attempts.length > 5) disposeSample(attempts.pop().sample);
-    committed = true;
-    selectedAttempt = attempt;
-    showAttempt(attempt);
-    renderInspection();
-    renderNetworkContext(sample.network);
-    captureFlash('✓ Foto NUEVA del intento ' + attempt.number + ' capturada y comparada');
-    status(
-      'PASO 2 COMPLETO: foto NUEVA tomada a las ' +
-        timeLabel(sample.capturedAt) +
-        '. Mira el resultado y la foto en «Fotos y comparación».',
-    );
-    log(
-      'Intento ' +
-        attempt.number +
-        ': ' +
-        distances.map((d) => d.toFixed(3)).join(' / ') +
-        ' · media ' +
-        mean.toFixed(3) +
-        ' · umbral ' +
-        threshold.toFixed(2),
-    );
-  } catch (e) {
-    if (token === generation) {
-      status(e.message);
-      result('No se pudo comparar', e.message, 'fail');
-      log('Comparación incompleta: ' + e.message);
+      showCaptureProgress(
+        ['retry'],
+        'No se confirmó el registro. Revisa el mensaje e inténtalo de nuevo.',
+        true,
+      );
+      result('Registro sin confirmar', e.message, 'fail');
     }
   } finally {
     if (sample && !committed) disposeSample(sample);
     finishCapture(token);
   }
+}
+async function verify() {
+  if (!window.IdentityWorkflow) {
+    status('No se pudo preparar la verificación. Recarga la página.');
+    return;
+  }
+  return verifyPersistent();
 }
 async function verifyPersistent() {
   if (
@@ -939,21 +852,10 @@ async function verifyPersistent() {
       () => token === generation,
     );
     if (token !== generation) return;
-    result(
-      response.match ? 'Coincidencia con tu registro' : 'Sin coincidencia',
-      'Umbral: ' +
-        response.threshold +
-        '. Intentos restantes: ' +
-        response.remaining +
-        '. La foto temporal se descarta.',
-      response.match ? 'success' : 'fail',
-      response.mean,
-    );
+    showUserResult(response.match, response.similarity, response.remaining);
     log(
-      'Comparación persistente: ' +
-        (response.match ? 'coincidencia' : 'sin coincidencia') +
-        ' · distancia ' +
-        response.mean.toFixed(3),
+      'Verificación completada: ' +
+        (response.match ? 'coincidencia' : 'sin coincidencia'),
     );
     status(
       response.match
@@ -977,17 +879,16 @@ function reset() {
   references = [];
   $('captureFeedback').hidden = true;
   $('captureFeedback').textContent = '';
-  showCaptureProgress(
-    ['pending', 'pending', 'pending'],
-    'Todavía no se ha guardado ninguna referencia.',
-  );
+  showCaptureProgress(['pending'], 'Todavía no se ha guardado ninguna referencia.');
   $('networkStatus').textContent = 'Contexto de conexión borrado de esta sesión.';
   $('reference').textContent = 'Sin referencia registrada';
+  $('referencePreview').src = '';
+  $('referencePreview').hidden = true;
   $('log').replaceChildren();
   renderInspection();
   result(
     'Esperando tu primera comparación',
-    'Aquí verás la distancia entre los vectores faciales.',
+    'Aquí verás si tu rostro coincide y un índice de similitud orientativo.',
   );
   status('Fotos, vectores e historial borrados. La cámara está apagada.');
   controls();

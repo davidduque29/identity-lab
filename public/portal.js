@@ -151,7 +151,7 @@ async function resizeAvatar(file) {
   bitmap.close();
   return canvas.toDataURL('image/jpeg', 0.86);
 }
-function showProfile(p) {
+async function showProfile(p, id) {
   const dl = document.createElement('dl');
   for (const [label, value] of [
     ['Nombre', [p.firstName, p.middleName, p.lastName].filter(Boolean).join(' ')],
@@ -162,6 +162,37 @@ function showProfile(p) {
   ])
     dl.append(textNode('dt', label), textNode('dd', value || '—'));
   byId('profileDetailBody').replaceChildren(dl);
+  try {
+    const details = await api('admin-profile&id=' + encodeURIComponent(id));
+    const image = new Image();
+    image.src = '/api/lab?action=reference-photo&id=' + encodeURIComponent(id);
+    image.alt = 'Referencia facial registrada';
+    image.className = 'reference-preview';
+    const technical = document.createElement('details'),
+      title = textNode('summary', 'Plantilla facial y datos técnicos (administración)');
+    technical.append(
+      title,
+      textNode(
+        'p',
+        'Modelo: ' +
+          details.biometric.model +
+          ' · versión ' +
+          details.biometric.schemaVersion +
+          ' · fotos guardadas: ' +
+          details.referenceCount,
+      ),
+    );
+    const vector = textNode(
+      'pre',
+      JSON.stringify(details.biometric.descriptors, null, 2),
+    );
+    vector.className = 'admin-vector';
+    technical.append(vector);
+    byId('profileDetailBody').append(image, technical);
+  } catch (error) {
+    byId('profileDetailBody').append(textNode('p', error.message));
+  }
+
   byId('profileDetail').showModal();
 }
 function renderUsers() {
@@ -187,9 +218,10 @@ function renderUsers() {
     const actions = document.createElement('td');
     const detail = textNode('button', 'Ver datos');
     detail.className = 'secondary';
-    detail.onclick = () => showProfile(p);
+    detail.onclick = () => showProfile(p, u.id);
     actions.append(detail);
     for (const [action, label] of [
+      ...(u.referenceCount > 1 ? [['compact-reference', 'Conservar solo 1 foto']] : []),
       ['unlock', 'Desbloquear'],
       [
         'allow-update',
@@ -246,8 +278,19 @@ async function refreshAdmin() {
       [
         date(e.created_at),
         e.action + ' / ' + (e.profile_id?.slice(0, 8) || 'Administración'),
-        r ? (r.match ? 'Coincide' : 'No coincide') + ' · ' + r.mean.toFixed(3) : '—',
-        p.network?.ip || 'No disponible',
+        r
+          ? (r.match ? 'Coincide' : 'No coincide') +
+            (r.similarity !== undefined ? ' · índice ' + r.similarity + '%' : '') +
+            ' · distancia ' +
+            r.mean.toFixed(6) +
+            ' · umbral ' +
+            r.threshold +
+            ' · distancias ' +
+            r.distances.map((d) => d.toFixed(6)).join(' / ')
+          : '—',
+        p.network?.ip
+          ? (p.network.ip.includes(':') ? 'IPv6: ' : 'IPv4: ') + p.network.ip
+          : 'No disponible',
         p.reason ||
           (p.rules
             ? 'Máx. ' +

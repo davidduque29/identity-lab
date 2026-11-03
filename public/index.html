@@ -8,20 +8,20 @@
       content="Laboratorio de biometría facial en tu navegador. Registra y compara tu rostro sin AWS."
     />
     <title>Identity Lab · David</title>
-    <link rel="stylesheet" href="style.css?v=7" />
+    <link rel="stylesheet" href="style.css?v=8" />
     <script defer src="vendor/face-api.min.js"></script>
-    <script defer src="capture-quality.js?v=5"></script>
-    <link rel="stylesheet" href="portal.css?v=7" />
-    <script defer src="workflow.js?v=6"></script>
-    <script defer src="app.js?v=6"></script>
-    <link rel="stylesheet" href="/interface.css?v=7" />
-    <script defer src="/account.js?v=7"></script>
+    <script defer src="capture-quality.js?v=8"></script>
+    <link rel="stylesheet" href="portal.css?v=8" />
+    <script defer src="workflow.js?v=8"></script>
+    <script defer src="app.js?v=8"></script>
+    <link rel="stylesheet" href="/interface.css?v=8" />
+    <script defer src="/account.js?v=8"></script>
   </head>
   <body>
     <header>
       <a class="brand" href="/portal.html"
         ><span class="logo">◈</span> identity<span>lab</span></a
-      ><span class="badge">LABORATORIO PERSONAL</span>
+      ><span class="badge">REGISTRO Y VALIDACIÓN</span>
       <details class="account-menu" id="accountMenu">
         <summary aria-label="Abrir opciones de mi cuenta">
           <span class="account-avatar" id="headerAvatar"
@@ -105,10 +105,10 @@
               <details class="consent-detail">
                 <summary>Qué se guarda y cuándo</summary>
                 <p>
-                  En el registro, las tres fotos, los vectores y tus datos se guardan
-                  después de confirmar el formulario y completar las tomas. En el
-                  laboratorio local permanecen solo en memoria. La foto de verificación
-                  persistente se descarta al terminar.
+                  En el registro, tu foto, la plantilla facial y tus datos se guardan
+                  después de confirmar el formulario y aceptar la toma. En el laboratorio
+                  local permanecen solo en memoria. La foto de verificación persistente se
+                  descarta al terminar.
                 </p>
               </details>
             </div>
@@ -120,6 +120,9 @@
               Listo para comenzar. Revisa el consentimiento del flujo elegido.
             </p>
           </div>
+          <p id="alignmentHint" class="alignment-hint" role="status" aria-live="polite">
+            Activa la cámara para evaluar el encuadre.
+          </p>
           <div class="viewport">
             <video id="video" autoplay playsinline muted></video
             ><svg
@@ -130,10 +133,10 @@
               aria-hidden="true"
               data-state="waiting"
             >
-              <ellipse id="guideEllipse" cx="320" cy="240" rx="179" ry="202" />
+              <ellipse id="guideEllipse" cx="320" cy="240" rx="104" ry="149" />
             </svg>
             <div class="capture-overlay">
-              <span id="captureStage">PASO 1 · TRES FOTOS DE REFERENCIA</span
+              <span id="captureStage">PASO 1 · UNA FOTO DE REFERENCIA</span
               ><strong id="alignmentLabel">Ajusta tu encuadre</strong>
             </div>
             <div id="countdown" class="countdown" hidden aria-live="assertive"></div>
@@ -145,33 +148,32 @@
                 iluminación.
               </p>
             </div>
+            <div id="cameraPrompt" class="camera-prompt" aria-hidden="true">
+              Coloca tu rostro dentro del óvalo.
+            </div>
             <span class="view-label">CÁMARA FRONTAL · CAPTURA LOCAL</span>
           </div>
           <div class="camera-foot">
             <div class="capture-actions">
               <button id="captureHere" class="primary" disabled>
-                1. Capturar 3 fotos de referencia</button
+                1. Tomar mi foto de registro</button
               ><button id="compareHere" class="secondary" disabled>
                 2. Tomar una foto NUEVA y comparar
               </button>
             </div>
-            <p id="alignmentHint" class="alignment-hint" role="status" aria-live="polite">
-              Activa la cámara para evaluar el encuadre.
-            </p>
+
             <p id="captureFeedback" class="capture-feedback" role="status" hidden></p>
 
             <section class="capture-evidence" aria-labelledby="captureEvidenceTitle">
               <h3 id="captureEvidenceTitle">Confirmación de las tomas</h3>
               <ol id="captureProgress" class="capture-progress">
-                <li data-state="pending">Foto 1: pendiente</li>
-                <li data-state="pending">Foto 2: pendiente</li>
-                <li data-state="pending">Foto 3: pendiente</li>
+                <li data-state="pending">Foto de referencia: pendiente</li>
               </ol>
               <p id="captureOutcome" role="status">
                 Todavía no se ha guardado ninguna referencia.
               </p>
               <button id="retryCapture" type="button" class="secondary" hidden disabled>
-                Repetir el registro completo
+                Repetir la foto
               </button>
             </section>
             <details class="connection-details">
@@ -207,13 +209,19 @@
               <div>
                 <h3>Registra tu referencia</h3>
                 <p>
-                  Capturaremos tres muestras de un único rostro. Mantén una expresión
-                  natural.
+                  Tomaremos una única foto de referencia. Después completa tus datos y
+                  confirma el registro.
                 </p>
                 <p class="step-instruction">
-                  Espera el contorno verde y pulsa el botón 1 debajo de la cámara. Tras 3
-                  segundos tomaremos 3 referencias.
+                  Espera el contorno verde y pulsa «Tomar mi foto de registro». La foto
+                  aceptada abrirá el formulario.
                 </p>
+                <img
+                  id="referencePreview"
+                  class="reference-preview"
+                  alt="Foto de referencia registrada"
+                  hidden
+                />
                 <div id="reference" class="reference">Sin referencia registrada</div>
               </div>
             </div>
@@ -224,8 +232,8 @@
                 <h3>Comprueba la coincidencia</h3>
                 <p>Toma una nueva captura para compararla con tu registro.</p>
                 <p class="step-instruction">
-                  Después del registro, pulsa el botón 2 debajo de la cámara. Tras otra
-                  cuenta regresiva tomaremos UNA foto nueva.
+                  Selecciona «Continuar y verificar mi rostro». Luego toma una foto nueva
+                  cuando el contorno esté verde.
                 </p>
               </div>
             </div>
@@ -235,7 +243,7 @@
             <div id="result" class="result" aria-live="polite">
               <span class="eyebrow">RESULTADO</span>
               <h3>Esperando tu primera comparación</h3>
-              <p>Aquí verás la distancia entre los vectores faciales.</p>
+              <p>Aquí verás si tu rostro coincide y su similitud orientativa.</p>
             </div>
             <button id="reset" class="text-button">
               Borrar fotos, vectores y resultados
@@ -251,7 +259,7 @@
           </div>
         </aside>
       </div>
-      <section class="panel inspection" id="inspection">
+      <section class="panel inspection" id="inspection" hidden>
         <div class="panel-head">
           <div>
             <p class="eyebrow">EVIDENCIA DE ESTA SESIÓN</p>
@@ -265,7 +273,7 @@
             foto para ampliarla y ver sus 128 valores. Las imágenes se muestran sin
             espejo; el recuadro señala el rostro detectado.
           </p>
-          <h3>Tus tres fotos de referencia</h3>
+          <h3>Tu foto de referencia</h3>
           <div id="referenceGallery" class="reference-gallery"></div>
           <div class="inspection-divider"></div>
           <h3>Nueva captura y cálculo</h3>
@@ -281,8 +289,9 @@
           <div id="comparisonDetail" class="comparison-detail"></div>
           <div class="memory-footer">
             <p>
-              Solo en memoria de esta pestaña. Al recargar o cerrar, estas fotos y
-              vectores desaparecen. No hay prueba de vida.
+              Consulta los datos técnicos desde Administración. Solo en memoria de esta
+              pestaña. Al recargar o cerrar, estas fotos y vectores desaparecen. No hay
+              prueba de vida.
             </p>
             <button id="clearMemory" class="secondary">Borrar toda la sesión</button>
           </div>
@@ -295,7 +304,7 @@
         </div>
         <div id="photoDetail"></div>
       </dialog>
-      <section class="bottom-grid">
+      <section class="bottom-grid" hidden>
         <article class="panel">
           <p class="eyebrow">QUÉ SUCEDE POR DENTRO</p>
           <h2>Una comparación, paso a paso</h2>
@@ -339,7 +348,7 @@
           </p>
         </article>
       </section>
-      <section class="panel log-panel">
+      <section class="panel log-panel" hidden>
         <div class="panel-head">
           <div>
             <p class="eyebrow">TRAZABILIDAD</p>

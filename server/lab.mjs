@@ -6,6 +6,7 @@ import {
   validSettings,
   descriptor,
   compare,
+  publicVerification,
   nextAttempt,
   rasterData,
 } from './domain.mjs';
@@ -155,7 +156,7 @@ export async function handleLab(request, env) {
           Math.max(0, Number(url.searchParams.get('offset')) || 0),
         );
         const users = await list(
-          'SELECT id,data,status,failures,locked_until,update_allowed,created_at,updated_at FROM profiles WHERE tenant=? ORDER BY created_at DESC LIMIT 50 OFFSET ?',
+          'SELECT id,data,status,failures,locked_until,update_allowed,created_at,updated_at,media FROM profiles WHERE tenant=? ORDER BY created_at DESC LIMIT 50 OFFSET ?',
           TENANT,
           offset,
         );
@@ -169,10 +170,39 @@ export async function handleLab(request, env) {
           TENANT,
         );
         return json({
-          users: users.map((p) => ({ ...p, data: parse(p.data) })),
+          users: users.map(({ media, ...p }) => ({
+            ...p,
+            data: parse(p.data),
+            referenceCount: parse(media).length,
+          })),
           events: events.map((e) => ({ ...e, payload: parse(e.payload) })),
           total: count.total,
           offset,
+        });
+      }
+      if (['admin-profile', 'reference-photo'].includes(action)) {
+        mustAdmin();
+        const p = await one(
+          'SELECT * FROM profiles WHERE id=? AND tenant=?',
+          url.searchParams.get('id'),
+          TENANT,
+        );
+        if (!p) fail('Registro no disponible.', 404);
+        if (action === 'admin-profile')
+          return json({
+            profile: parse(p.data),
+            biometric: parse(p.biometric),
+            referenceCount: parse(p.media).length,
+            createdAt: p.created_at,
+          });
+        const image = await storage.get(parse(p.media)[0]);
+        if (!image) fail('Foto no disponible.', 404);
+        return new Response(image.body, {
+          headers: {
+            'Content-Type': image.httpMetadata?.contentType || 'image/jpeg',
+            'Cache-Control': 'private, no-store',
+            'X-Content-Type-Options': 'nosniff',
+          },
         });
       }
       if (action === 'avatar') {
@@ -273,6 +303,27 @@ export async function handleLab(request, env) {
         'Set-Cookie': 'il_session=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0',
       });
     }
+    if (action === 'begin-verification') {
+      if (session) {
+        if (session.status !== 'registered') fail('Completa primero tu registro.', 409);
+        await run(
+          'UPDATE sessions SET mode=?,status=?,expires_at=? WHERE id=? AND claimant=?',
+          'verify',
+          'claimed',
+          now + rules.qrMinutes * 60000,
+          session.id,
+          actor,
+        );
+        return json({ ok: true }, 200, {
+          'Set-Cookie':
+            'il_session=' +
+            cookie +
+            '; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=' +
+            rules.qrMinutes * 60,
+        });
+      }
+      return json({ ok: true });
+    }
     if (action === 'lookup') {
       const doc = await hash(
         TENANT + ':' + documentKey(data.documentType, data.documentNumber),
@@ -338,25 +389,12 @@ export async function handleLab(request, env) {
           'Este documento ya tiene un registro. Usa «Verificar» o solicita autorización para actualizarlo.',
           409,
         );
-      if (!Array.isArray(data.samples) || data.samples.length !== 3)
-        fail('Se necesitan tres fotos aceptadas.');
+      if (!Array.isArray(data.samples) || data.samples.length !== 1)
+        fail('Se necesita una única foto aceptada.');
       const images = data.samples.map((s) => ({
         ...rasterData(s.image),
         descriptor: descriptor(s.descriptor),
       }));
-      if (
-        images
-          .slice(1)
-          .some(
-            (image) =>
-              !compare(
-                [images[0].descriptor, images[0].descriptor, images[0].descriptor],
-                image.descriptor,
-                rules.threshold,
-              ).match,
-          )
-      )
-        fail('Las muestras no son consistentes entre sí. Repite las tres fotos.');
       const id = existing?.id || uuid(),
         revision = uuid();
       const keys = images.map(
@@ -367,7 +405,7 @@ export async function handleLab(request, env) {
         ...profile,
         consent: {
           accepted: true,
-          version: '2026-11-02-v1',
+          version: '2026-11-02-v2-single',
           at: new Date(now).toISOString(),
           actor,
         },
@@ -375,11 +413,11 @@ export async function handleLab(request, env) {
       };
       const biometric = {
         model: MODEL,
-        schemaVersion: 1,
+        schemaVersion: 2,
         descriptors: images.map((i) => i.descriptor),
       };
       try {
-        for (let i = 0; i < 3; i++)
+        for (let i = 0; i < 1; i++)
           await storage.put(keys[i], images[i].bytes, images[i].type);
         const statement = existing
           ? db
@@ -414,7 +452,7 @@ export async function handleLab(request, env) {
               );
         const eventPayload = JSON.stringify({
           model: MODEL,
-          photos: 3,
+          photos: 1,
           storage: storage.name,
           network: getNetworkContext(request),
           rules,
@@ -458,7 +496,7 @@ export async function handleLab(request, env) {
       }
       if (session)
         await run('UPDATE sessions SET status=? WHERE id=?', 'registered', session.id);
-      return json({ id, saved: true, photos: 3, cleanupPending });
+      return json({ id, saved: true, photos: 1, cleanupPending });
     }
     if (action === 'verify') {
       if (session && session.mode !== 'verify')
@@ -469,12 +507,7 @@ export async function handleLab(request, env) {
       let p = await requireProfile(data.id);
       const resultFor = (event, person) => {
         const v = parse(event.payload);
-        return {
-          ...v.result,
-          remaining: v.remaining,
-          retryAt: v.retryAt,
-          profile: v.result.match ? parse(person.data) : null,
-        };
+        return publicVerification(v.result, v.remaining, v.retryAt, parse(person.data));
       };
       const existingEvent = await one(
         'SELECT payload FROM events WHERE id=? AND actor=? AND profile_id=? AND action=?',
@@ -492,7 +525,11 @@ export async function handleLab(request, env) {
             retryAt: p.locked_until,
           });
         }
-        const result = compare(parse(p.biometric).descriptors, probe, rules.threshold);
+        const result = compare(
+          parse(p.biometric).descriptors.slice(0, 1),
+          probe,
+          rules.threshold,
+        );
         const counter = nextAttempt(p, result.match, rules, now);
         const payload = {
           result,
@@ -537,12 +574,14 @@ export async function handleLab(request, env) {
               result.match ? 'finished' : 'claimed',
               session.id,
             );
-          return json({
-            ...result,
-            remaining: counter.remaining,
-            retryAt: counter.lockedUntil || null,
-            profile: result.match ? parse(p.data) : null,
-          });
+          return json(
+            publicVerification(
+              result,
+              counter.remaining,
+              counter.lockedUntil || null,
+              parse(p.data),
+            ),
+          );
         }
         const concurrent = await one(
           'SELECT payload FROM events WHERE id=? AND actor=? AND profile_id=? AND action=?',
@@ -583,7 +622,7 @@ export async function handleLab(request, env) {
       ]);
       return json({ rules: value });
     }
-    if (['unlock', 'allow-update', 'delete'].includes(action)) {
+    if (['unlock', 'allow-update', 'delete', 'compact-reference'].includes(action)) {
       mustAdmin();
       const reason = String(data.reason || '').trim();
       if (reason.length < 5 || reason.length > 300)
@@ -594,7 +633,26 @@ export async function handleLab(request, env) {
         TENANT,
       );
       if (!p) fail('Usuario no disponible.', 404);
-      if (action === 'delete') {
+      if (action === 'compact-reference') {
+        const media = parse(p.media),
+          biometric = parse(p.biometric);
+        if (media.length > 1) {
+          const changed = await run(
+            'UPDATE profiles SET media=?,biometric=?,version=version+1 WHERE id=? AND version=?',
+            JSON.stringify(media.slice(0, 1)),
+            JSON.stringify({
+              ...biometric,
+              schemaVersion: 2,
+              descriptors: biometric.descriptors.slice(0, 1),
+            }),
+            p.id,
+            p.version,
+          );
+          if (!changed.meta.changes)
+            fail('El registro cambió. Actualiza y vuelve a intentarlo.', 409);
+          await storage.remove(media.slice(1));
+        }
+      } else if (action === 'delete') {
         await run(
           'UPDATE profiles SET status=?,version=version+1 WHERE id=?',
           'deleting',
