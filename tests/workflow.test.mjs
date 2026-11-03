@@ -3,7 +3,13 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, readdirSync } from 'node:fs';
 import { handleLab } from '../server/lab.mjs';
-import { DEFAULTS, nextAttempt, validSettings, compare } from '../server/domain.mjs';
+import {
+  DEFAULTS,
+  nextAttempt,
+  validSettings,
+  compare,
+  validateProfile,
+} from '../server/domain.mjs';
 
 function harness() {
   const sql = new DatabaseSync(':memory:');
@@ -505,4 +511,22 @@ test('public deployment warns about an existing document and offers comparison a
   });
   assert.equal(lookup.content.id, saved.content.id);
   assert.equal(lookup.content.profile, undefined);
+});
+
+test('separate surnames survive validation and legacy names are not guessed', () => {
+  const base = registration().profile;
+  const separated = validateProfile({
+    ...base,
+    firstSurname: 'De la Cruz',
+    secondSurname: 'Perdomo',
+  });
+  assert.equal(separated.firstSurname, 'De la Cruz');
+  assert.equal(separated.secondSurname, 'Perdomo');
+  assert.equal(separated.lastName, 'De la Cruz Perdomo');
+  const legacy = validateProfile({ ...base, lastName: 'De la Cruz Perdomo' });
+  assert.equal(legacy.firstSurname, 'De la Cruz Perdomo');
+  assert.equal(legacy.secondSurname, '');
+  assert.throws(() =>
+    validateProfile({ ...base, firstSurname: '', secondSurname: 'Solo' }),
+  );
 });

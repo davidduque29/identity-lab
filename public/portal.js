@@ -157,7 +157,12 @@ async function resizeAvatar(file) {
 async function showProfile(p, id) {
   const dl = document.createElement('dl');
   for (const [label, value] of [
-    ['Nombre', [p.firstName, p.middleName, p.lastName].filter(Boolean).join(' ')],
+    [
+      'Nombre',
+      [p.firstName, p.middleName, p.firstSurname || p.lastName, p.secondSurname]
+        .filter(Boolean)
+        .join(' '),
+    ],
     ['Documento', p.documentType + ' ' + p.documentNumber],
     ['Nacimiento', p.birthDate],
     ['Dirección', p.address],
@@ -206,7 +211,9 @@ function renderUsers() {
   byId('usersRows').replaceChildren();
   for (const u of adminData.users) {
     const p = u.data,
-      name = [p.firstName, p.middleName, p.lastName].filter(Boolean).join(' ');
+      name = [p.firstName, p.middleName, p.firstSurname || p.lastName, p.secondSurname]
+        .filter(Boolean)
+        .join(' ');
     if (!JSON.stringify(p).toLowerCase().includes(search)) continue;
     const row = document.createElement('tr');
     [

@@ -62,6 +62,18 @@
       'aria-current',
       targetId || mode === 'verify' ? 'step' : 'false',
     );
+    const registrationLocked = !!targetId || mode === 'verify';
+    const registrationLink = $w('captureModeRegister');
+    registrationLink.setAttribute('aria-disabled', String(registrationLocked));
+    registrationLink.tabIndex = registrationLocked ? -1 : 0;
+    if (registrationLocked) registrationLink.removeAttribute('href');
+    else registrationLink.setAttribute('href', 'index.html?flow=register&new=1');
+    registrationLink.textContent = registrationLocked
+      ? '1. Registro protegido ✓'
+      : '1. Registrar mi rostro';
+    if (targetId)
+      $w('reference').textContent =
+        '✓ Referencia guardada. La comparación no cambia tu foto de registro.';
     $w('repeatComparison').hidden = !completed;
     $w('registerStep').hidden = false;
     $w('compareStep').hidden = false;
@@ -106,7 +118,7 @@
   dialog.id = 'registrationDialog';
   dialog.className = 'profile-form';
   dialog.innerHTML =
-    '<form id="identityForm"><h2 id="identityTitle"></h2><p id="identityInstruction"></p><img id="registrationPreview" class="registration-preview" alt="Tu foto de referencia aceptada" hidden /><fieldset id="identityFields"><div class="form-grid"><label>Nombre<input name="firstName" autocomplete="given-name" maxlength="180" required /></label><label>Segundo nombre (opcional)<input name="middleName" autocomplete="additional-name" maxlength="180" /></label></div><label>Apellidos<input name="lastName" autocomplete="family-name" maxlength="180" required /></label><label>Fecha de nacimiento<input name="birthDate" type="date" min="1900-01-01" required /></label><label>Dirección de residencia<input name="address" autocomplete="street-address" maxlength="180" required /></label></fieldset><div class="form-grid"><label>Tipo de documento<select name="documentType"><option value="CC">Cédula de ciudadanía</option><option value="CE">Cédula de extranjería</option><option value="TI">Tarjeta de identidad</option><option value="PAS">Pasaporte</option></select></label><label>Número de documento<input name="documentNumber" maxlength="24" required /></label></div><label id="recordConsentLabel" class="consent"><input name="consent" type="checkbox" required /> Autorizo guardar mis datos, una foto de referencia, su plantilla facial y eventos con IP para esta demo. Puedo solicitar su eliminación. Mis datos son declarados, no verificados contra un documento.</label><label id="updateRecordLabel" class="consent" hidden><input name="updateRecord" type="checkbox" /> Actualizar mi registro (requiere autorización administrativa).</label><button id="existingRecordAction" class="primary" type="button" hidden>Usar mi registro y comparar</button><p id="identityError" class="error-text" role="alert"></p><div class="button-row"><button id="identitySubmit" class="primary" type="submit"></button><button id="identityCancel" class="secondary" type="button">Cancelar</button></div></form>';
+    '<form id="identityForm"><h2 id="identityTitle"></h2><p id="identityInstruction"></p><img id="registrationPreview" class="registration-preview" alt="Tu foto de referencia aceptada" hidden /><fieldset id="identityFields"><div class="form-grid"><label>Nombre<input name="firstName" autocomplete="given-name" maxlength="180" required /></label><label>Segundo nombre (opcional)<input name="middleName" autocomplete="additional-name" maxlength="180" /></label></div><div class="form-grid"><label>Primer apellido<input name="firstSurname" autocomplete="family-name" maxlength="180" required /></label><label>Segundo apellido (opcional)<input name="secondSurname" maxlength="180" /></label></div><label>Fecha de nacimiento<input name="birthDate" type="date" min="1900-01-01" required /></label><label>Dirección de residencia<input name="address" autocomplete="street-address" maxlength="180" required /></label></fieldset><div class="form-grid"><label>Tipo de documento<select name="documentType"><option value="CC">Cédula de ciudadanía</option><option value="CE">Cédula de extranjería</option><option value="TI">Tarjeta de identidad</option><option value="PAS">Pasaporte</option></select></label><label>Número de documento<input name="documentNumber" maxlength="24" required /></label></div><label id="recordConsentLabel" class="consent"><input name="consent" type="checkbox" required /> Autorizo guardar mis datos, una foto de referencia, su plantilla facial y eventos con IP para esta demo. Puedo solicitar su eliminación. Mis datos son declarados, no verificados contra un documento.</label><label id="updateRecordLabel" class="consent" hidden><input name="updateRecord" type="checkbox" /> Actualizar mi registro (requiere autorización administrativa).</label><button id="existingRecordAction" class="primary" type="button" hidden>Usar mi registro y comparar</button><p id="identityError" class="error-text" role="alert"></p><div class="button-row"><button id="identitySubmit" class="primary" type="submit"></button><button id="identityCancel" class="secondary" type="button">Cancelar</button></div></form>';
   document.body.append(dialog);
   const form = $w('identityForm');
   $w('existingRecordAction').onclick = () => {
@@ -224,7 +236,14 @@
     for (const [label, value] of [
       [
         'Persona registrada',
-        [person.firstName, person.middleName, person.lastName].filter(Boolean).join(' '),
+        [
+          person.firstName,
+          person.middleName,
+          person.firstSurname || person.lastName,
+          person.secondSurname,
+        ]
+          .filter(Boolean)
+          .join(' '),
       ],
       ['Documento', person.documentType + ' ' + person.documentNumber],
       ['Nacimiento', person.birthDate],

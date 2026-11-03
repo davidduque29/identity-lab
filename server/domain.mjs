@@ -46,14 +46,20 @@ export function validateProfile(value) {
   for (const [key, required] of [
     ['firstName', true],
     ['middleName', false],
-    ['lastName', true],
+    ['firstSurname', true],
+    ['secondSurname', false],
     ['address', true],
   ]) {
-    const v = String(value[key] || '').trim();
+    const v = String(
+      (key === 'firstSurname' ? (value.firstSurname ?? value.lastName) : value[key]) ||
+        '',
+    ).trim();
     if ((required && !v) || v.length > 180 || /[\x00-\x1f]/.test(v))
       throw new ValidationError('Revisa el campo ' + key);
     out[key] = v;
   }
+  // Keep the combined field for older clients; never guess how to split existing surnames.
+  out.lastName = [out.firstSurname, out.secondSurname].filter(Boolean).join(' ');
   const date = String(value.birthDate || '');
   if (
     !/^\d{4}-\d{2}-\d{2}$/.test(date) ||

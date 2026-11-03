@@ -23,7 +23,12 @@ class Element {
   addEventListener(name, fn) {
     this.events[name] = fn;
   }
-  setAttribute() {}
+  setAttribute(key, value) {
+    (this.attributes ??= {})[key] = value;
+  }
+  removeAttribute(key) {
+    delete (this.attributes ??= {})[key];
+  }
   showModal() {
     this.open = true;
   }
@@ -292,6 +297,9 @@ test('default entry initializes the full workflow without randomUUID and opens t
   };
   await context.window.IdentityWorkflow.save([reference]);
   assert.equal(get('comparisonAction').hidden, false);
+  assert.equal(get('captureModeRegister').attributes['aria-disabled'], 'true');
+  assert.equal(get('captureModeRegister').attributes.href, undefined);
+  assert.equal(get('captureModeRegister').tabIndex, -1);
   assert.equal(get('armComparison').disabled, false);
   assert.equal(context.window.IdentityWorkflow.canCompare(), true);
   assert.equal(get('referenceProofImage').src, reference.image);
@@ -311,6 +319,9 @@ test('default entry initializes the full workflow without randomUUID and opens t
   assert.equal(get('comparisonProofImage').src, '');
   assert.equal(get('comparisonProofImage').hidden, true);
   assert.equal(get('comparisonAction').hidden, false);
+  assert.equal(get('captureModeRegister').attributes['aria-disabled'], 'true');
+  assert.equal(get('captureModeRegister').attributes.href, undefined);
+  assert.equal(get('captureModeRegister').tabIndex, -1);
   assert.equal(get('armComparison').disabled, false);
   assert.equal(context.window.IdentityWorkflow.canCompare(), true);
 });
@@ -459,4 +470,30 @@ test('turning off the camera during the automatic warning prevents the photo', a
   for (let i = 0; i < 3; i++) await scheduled.shift()();
   assert.equal(context.count, 0);
   assert.equal(scheduled.length, 0);
+});
+
+test('starting without consent alerts and never requests camera access', async () => {
+  const { context, nodes } = createHarness();
+  context.window.alert = (message) => {
+    context.alertMessage = message;
+  };
+  await vm.runInContext('start()', context);
+  assert.match(context.alertMessage, /Autorizo/);
+  assert.match(nodes.get('status').textContent, /autorización/);
+});
+
+test('denied camera permission opens an actionable alert', async () => {
+  const { context, nodes } = createHarness();
+  context.window.alert = (message) => {
+    context.alertMessage = message;
+  };
+  context.window.IdentityWorkflow = { ready: () => true };
+  context.navigator.mediaDevices = {
+    getUserMedia: async () => {
+      throw Object.assign(new Error('denied'), { name: 'NotAllowedError' });
+    },
+  };
+  await vm.runInContext("$('consent').checked = true; start()", context);
+  assert.match(context.alertMessage, /Permiso denegado/);
+  assert.match(context.alertMessage, /icono de permisos/);
 });

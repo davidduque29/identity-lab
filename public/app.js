@@ -102,11 +102,14 @@ async function readNetworkContext() {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 2500);
   try {
-    const response = await (window.IdentityTransport?.fetch || fetch)('/api/network-context', {
-      cache: 'no-store',
-      credentials: 'same-origin',
-      signal: controller.signal,
-    });
+    const response = await (window.IdentityTransport?.fetch || fetch)(
+      '/api/network-context',
+      {
+        cache: 'no-store',
+        credentials: 'same-origin',
+        signal: controller.signal,
+      },
+    );
     if (
       !response.ok ||
       !response.headers.get('content-type')?.includes('application/json')
@@ -767,7 +770,10 @@ function stop({ completed = false, registered = false } = {}) {
 async function start() {
   if (busy || stream) return;
   if (!$('consent').checked) {
-    status('Marca la autorización antes de activar la cámara.');
+    status('Debes dar tu autorización para usar el rostro antes de activar la cámara.');
+    window.alert(
+      'Debes marcar «Autorizo usar mi rostro en esta demo» antes de activar la cámara.',
+    );
     $('consent').focus();
     return;
   }
@@ -840,6 +846,11 @@ async function start() {
             ? 'La cámara está ocupada por otra aplicación.'
             : e.message;
     status(message);
+    if (e.name === 'NotAllowedError')
+      window.alert(
+        message +
+          ' Pulsa el icono de permisos junto a la dirección de la página y permite el acceso.',
+      );
     log(message);
   } finally {
     if (token === generation || !stream) {

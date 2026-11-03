@@ -2,7 +2,8 @@
 (() => {
   const config = window.IDENTITY_DEPLOYMENT;
   const status = document.getElementById('status');
-  let sent = false;
+  let codeMode = false;
+  let resendAt = 0;
   const callback = new URLSearchParams(location.hash.slice(1));
   if (callback.get('access_token') && callback.get('refresh_token')) {
     localStorage.setItem(
@@ -18,6 +19,31 @@
     location.replace('portal.html#administracion');
     return;
   }
+  if (callback.get('error_description')) {
+    status.textContent = 'El enlace no es válido o venció. Solicita uno nuevo.';
+    history.replaceState(null, '', location.pathname);
+  }
+  document.getElementById('useCode').onclick = () => {
+    codeMode = true;
+    document.getElementById('codeLabel').hidden = false;
+    document.getElementById('code').required = true;
+    document.getElementById('submit').hidden = false;
+    document.getElementById('submit').textContent = 'Validar código';
+    document.getElementById('code').focus();
+  };
+  document.getElementById('resend').onclick = () => {
+    if (Date.now() < resendAt) {
+      status.textContent =
+        'Espera ' +
+        Math.ceil((resendAt - Date.now()) / 1000) +
+        ' segundos antes de pedir otro enlace.';
+      return;
+    }
+    codeMode = false;
+    document.getElementById('code').required = false;
+    document.getElementById('codeLabel').hidden = true;
+    document.getElementById('login').requestSubmit();
+  };
   if (location.hash === '#salir') {
     const session = JSON.parse(localStorage.getItem('identity-lab:admin') || 'null');
     localStorage.removeItem('identity-lab:admin');
@@ -41,7 +67,7 @@
       const response = await fetch(
         config.url +
           '/auth/v1/' +
-          (sent
+          (codeMode
             ? 'verify'
             : 'otp?redirect_to=' +
               encodeURIComponent(new URL('admin-login.html', location.href).href)),
@@ -49,32 +75,34 @@
           method: 'POST',
           headers: { apikey: config.publishableKey, 'Content-Type': 'application/json' },
           body: JSON.stringify(
-            sent
+            codeMode
               ? {
                   email,
                   token: document.getElementById('code').value.trim(),
                   type: 'email',
                 }
-              : { email, create_user: true },
+              : { email, create_user: false },
           ),
         },
       );
       const result = await response.json();
       if (!response.ok)
         throw new Error(
-          result.msg || result.message || 'No se pudo completar el acceso.',
+          response.status === 429
+            ? 'Se alcanzó el límite de envíos. Espera unos minutos antes de volver a solicitar el acceso.'
+            : result.msg || result.message || 'No se pudo completar el acceso.',
         );
-      if (sent) {
+      if (codeMode) {
         localStorage.setItem('identity-lab:admin', JSON.stringify(result));
         location.replace('portal.html#administracion');
       } else {
-        sent = true;
-        document.getElementById('codeLabel').hidden = false;
-        document.getElementById('code').required = true;
+        resendAt = Date.now() + 60000;
+        document.getElementById('useCode').hidden = false;
+        document.getElementById('resend').hidden = false;
         document.getElementById('email').readOnly = true;
-        button.textContent = 'Validar código';
+        button.hidden = true;
         status.textContent =
-          'Revisa tu correo e introduce el código recibido. Si el mensaje trae un enlace, ábrelo para iniciar sesión.';
+          'Solicitud aceptada. Revisa la bandeja de entrada y correo no deseado del correo indicado. Abre el enlace del mensaje más reciente de Identity Lab; no necesitas un código numérico. Si tu plantilla sí incluye un código, pulsa «Mi correo trae un código».';
       }
     } catch (error) {
       status.textContent = error.message;
