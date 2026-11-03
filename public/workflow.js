@@ -18,7 +18,8 @@
     pauseUntil = 0,
     saved = false,
     completed = false,
-    preparation = null;
+    preparation = null,
+    qrMode = null;
   const $w = (id) => document.getElementById(id);
   async function api(action, data) {
     const response = await (window.IdentityTransport?.fetch || fetch)(
@@ -57,6 +58,12 @@
     $w('captureModeRegister').setAttribute(
       'aria-current',
       targetId || mode === 'verify' ? 'false' : 'step',
+    );
+    $w('captureModeVerify').setAttribute(
+      'href',
+      qrMode === 'register' && !targetId
+        ? 'portal.html?flow=verify'
+        : 'index.html?flow=verify',
     );
     $w('captureModeVerify').setAttribute(
       'aria-current',
@@ -127,7 +134,9 @@
       documentNumber: form.elements.documentNumber.value,
     };
     sessionStorage.setItem('identity-existing-document', JSON.stringify(doc));
-    location.assign('index.html?flow=verify');
+    location.assign(
+      qrMode === 'register' ? 'portal.html?flow=verify' : 'index.html?flow=verify',
+    );
   };
   form.elements.birthDate.max = new Date().toISOString().slice(0, 10);
   function askForm(verify = false) {
@@ -268,6 +277,7 @@
           { id: targetId },
         );
         preparation = null;
+        if (qrMode) qrMode = 'verify';
       }
       mode = 'verify';
       window.IdentityWorkflow.mode = mode;
@@ -419,9 +429,23 @@
       const ctx = await api('context');
       if (new URLSearchParams(location.search).has('paired') && !ctx.session)
         throw new Error('El QR venció o finalizó. Vuelve al inicio y genera otro.');
-      if (ctx.session && ctx.session.mode !== mode)
-        throw new Error('Este QR corresponde a otro paso. Vuelve al inicio.');
+      qrMode = ctx.session?.mode || null;
+      // A valid QR is authoritative when a page is reloaded with an older flow URL.
+      if (ctx.session) {
+        mode = ctx.session.mode;
+        window.IdentityWorkflow.mode = mode;
+        if (
+          mode === 'register' &&
+          ctx.session.status === 'registered' &&
+          ctx.existingRecord
+        ) {
+          targetId = ctx.existingRecord.id;
+          saved = true;
+          preparation = 'begin';
+        }
+      }
       if (
+        !ctx.session &&
         mode === 'register' &&
         ctx.existingRecord &&
         !new URLSearchParams(location.search).has('new')
@@ -437,7 +461,7 @@
       }
       $w('threshold').value = ctx.rules.threshold;
       $w('thresholdValue').value = ctx.rules.threshold.toFixed(2);
-      if (mode === 'verify') {
+      if (mode === 'verify' || targetId) {
         if (!targetId) await askForm(true);
         $w('referenceProofPlaceholder').textContent =
           'Referencia guardada: se mostrará después de una coincidencia.';
@@ -447,7 +471,7 @@
       initialized = true;
       modeUI();
       notice(
-        mode === 'register'
+        mode === 'register' && !targetId
           ? 'Activa la cámara y céntrate. La FOTO 1 se tomará automáticamente y abrirá el formulario de datos.'
           : 'Ya existe un registro. No se guardará otra referencia. Pulsa «Continuar con la segunda foto» encima de la cámara. La captura será automática.',
       );

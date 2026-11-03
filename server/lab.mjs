@@ -141,7 +141,13 @@ export async function handleLab(request, env) {
             : null,
           email,
           rules,
-          session: session ? { mode: session.mode, expiresAt: session.expires_at } : null,
+          session: session
+            ? {
+                mode: session.mode,
+                status: session.status,
+                expiresAt: session.expires_at,
+              }
+            : null,
           storage: storage.name,
           drive: {
             ready: false,

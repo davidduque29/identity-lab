@@ -497,3 +497,76 @@ test('denied camera permission opens an actionable alert', async () => {
   assert.match(context.alertMessage, /Permiso denegado/);
   assert.match(context.alertMessage, /icono de permisos/);
 });
+
+function qrWorkflowHarness(serverContext, search = '?flow=verify&paired=1') {
+  const nodes = new Map();
+  const get = (id) => {
+    if (!nodes.has(id)) nodes.set(id, new Element());
+    return nodes.get(id);
+  };
+  get('identityForm').elements = { birthDate: new Element() };
+  const calls = [];
+  const context = vm.createContext({
+    document: {
+      getElementById: get,
+      createElement: () => new Element(),
+      querySelector: () => ({ before() {} }),
+      body: { append() {} },
+    },
+    window: {},
+    location: { search },
+    URLSearchParams,
+    Date,
+    crypto: require('node:crypto').webcrypto,
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      return {
+        ok: true,
+        json: async () => (url.includes('action=context') ? serverContext : { ok: true }),
+      };
+    },
+  });
+  vm.runInContext(
+    fs.readFileSync(path.join(__dirname, '../public/workflow.js'), 'utf8'),
+    context,
+  );
+  return { context, get, calls };
+}
+
+test('QR enrollment with an old comparison URL recovers its real mode and offers an explicit exit to compare', async () => {
+  const h = qrWorkflowHarness({
+    rules: { threshold: 0.5 },
+    session: { mode: 'register', status: 'claimed' },
+  });
+  await new Promise(setImmediate);
+  assert.equal(h.context.window.IdentityWorkflow.mode, 'register');
+  assert.equal(h.context.window.IdentityWorkflow.ready(), true);
+  assert.equal(h.get('captureModeVerify').attributes.href, 'portal.html?flow=verify');
+  assert.doesNotMatch(h.get('workflowStatus').textContent, /otro paso/);
+});
+
+test('reloading a saved QR enrollment resumes comparison without capturing another reference', async () => {
+  const h = qrWorkflowHarness(
+    {
+      rules: { threshold: 0.5 },
+      existingRecord: { id: 'saved-person' },
+      session: { mode: 'register', status: 'registered' },
+    },
+    '?flow=register&paired=1',
+  );
+  await new Promise(setImmediate);
+  assert.equal(h.context.window.IdentityWorkflow.canCompare(), true);
+  assert.equal(h.get('captureModeRegister').attributes['aria-disabled'], 'true');
+  assert.match(h.get('workflowStatus').textContent, /segunda foto/);
+  await h.context.window.IdentityWorkflow.prepareVerification();
+  assert.equal(h.context.window.IdentityWorkflow.mode, 'verify');
+  assert.ok(h.calls.some((c) => c.url.includes('action=begin-verification')));
+  assert.ok(!h.calls.some((c) => c.url.includes('action=register')));
+});
+
+test('expired QR still blocks capture with a clear recovery instruction', async () => {
+  const h = qrWorkflowHarness({ rules: { threshold: 0.5 }, session: null });
+  await new Promise(setImmediate);
+  assert.equal(h.context.window.IdentityWorkflow.ready(), false);
+  assert.match(h.get('workflowStatus').textContent, /QR venció/);
+});

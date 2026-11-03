@@ -396,6 +396,11 @@ byId('purgeEvents').onclick = async () => {
     }
     // Returning to the portal ends the previous browser capture session, not the stored profile.
     await api('end', {});
+    const requestedFlow = new URLSearchParams(location.search).get('flow');
+    if (['register', 'verify'].includes(requestedFlow)) {
+      location.replace('index.html?flow=' + requestedFlow);
+      return;
+    }
     context = await api('context');
     byId('userArea').hidden = false;
     byId('adminToggle').hidden = !context.admin;
