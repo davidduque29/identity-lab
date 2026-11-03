@@ -23,13 +23,18 @@
           Entra con el correo y la contraseña de tu cuenta de Identity Lab.
         </p>
         <form id="login">
-          <label
+          <label id="emailLabel"
             >Correo administrativo<input
               id="email"
               type="email"
               required
               autocomplete="username"
+              aria-describedby="recoveryAccountHint"
           /></label>
+          <p id="recoveryAccountHint" hidden>
+            Este correo corresponde a la cuenta del enlace recibido. No necesitas
+            escribirlo ni cambiarlo; solo elige tu nueva contraseña.
+          </p>
           <label
             >Contraseña
             <div class="password-field">

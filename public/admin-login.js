@@ -89,6 +89,8 @@
       next === 'set-password' ? 'Guardar contraseña y entrar' : 'Entrar';
     get('email').required = next !== 'set-password';
     get('email').readOnly = next === 'set-password';
+    get('emailLabel').hidden = false;
+    get('recoveryAccountHint').hidden = next !== 'set-password';
     get('cancelRecovery').hidden = next !== 'set-password';
     get('loginInstruction').textContent =
       next === 'set-password'
@@ -149,6 +151,7 @@
     pending = true;
     get('submit').disabled = true;
     get('status').textContent = 'Validando tu acceso…';
+    let passwordSaved = false;
     try {
       let session;
       if (mode === 'set-password') {
@@ -163,6 +166,7 @@
           { method: 'PUT', token: recoveryToken.access_token },
         );
         session = recoveryToken;
+        passwordSaved = true;
         get('confirmPassword').value = '';
       } else {
         session = await request('/auth/v1/token?grant_type=password', {
@@ -173,7 +177,16 @@
       get('password').value = '';
       await authorize(session, current);
     } catch (error) {
-      if (current === attempt) get('status').textContent = error.message;
+      if (current === attempt) {
+        if (passwordSaved) {
+          recoveryToken = null;
+          setMode('login');
+          get('status').textContent =
+            'Tu contraseña se guardó correctamente, pero no pudimos abrir el panel. ' +
+            error.message +
+            ' Puedes volver a entrar con tu correo y tu nueva contraseña.';
+        } else get('status').textContent = error.message;
+      }
     } finally {
       pending = false;
       get('submit').disabled = false;
@@ -212,9 +225,39 @@
     if (!session) return;
     if (callback.get('access_token')) history.replaceState(null, '', location.pathname);
     if (callback.get('type') === 'recovery') {
-      recoveryToken = session;
       setMode('set-password');
-      get('status').textContent = 'Enlace recibido. Define tu contraseña para continuar.';
+      get('email').value = '';
+      get('emailLabel').hidden = true;
+      get('recoveryAccountHint').hidden = true;
+      pending = true;
+      get('submit').disabled = true;
+      get('status').textContent = 'Comprobando la cuenta del enlace recibido…';
+      try {
+        const user = await request('/auth/v1/user', null, {
+          method: 'GET',
+          token: session.access_token,
+        });
+        if (current !== attempt) return;
+        if (!user.email)
+          throw new Error('No se pudo identificar el correo de la cuenta.');
+        recoveryToken = session;
+        get('email').value = user.email;
+        get('emailLabel').hidden = false;
+        get('recoveryAccountHint').hidden = false;
+        get('status').textContent =
+          'Cuenta verificada. Escribe y confirma tu nueva contraseña para continuar.';
+      } catch (error) {
+        if (current !== attempt) return;
+        recoveryToken = null;
+        setMode('login');
+        get('status').textContent =
+          'No pudimos comprobar el enlace. ' +
+          error.message +
+          ' Tu contraseña no se ha cambiado.';
+      } finally {
+        pending = false;
+        get('submit').disabled = false;
+      }
       return;
     }
     get('status').textContent = 'Comprobando tu sesión administrativa…';

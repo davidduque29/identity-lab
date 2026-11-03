@@ -75,7 +75,12 @@ function harness({
       return {
         ok: !failure,
         status: failure ? 429 : 200,
-        json: async () => (url.includes('action=context') ? { admin } : session),
+        json: async () =>
+          url.includes('action=context')
+            ? { admin }
+            : url.endsWith('/auth/v1/user')
+              ? { email: 'verified@example.test' }
+              : session,
       };
     },
   });
@@ -135,7 +140,12 @@ test('recovery sends to the existing allowed callback and reports mail limits', 
 test('recovery callback asks for a new password rather than skipping to the portal', async () => {
   const h = harness({ hash: '#access_token=fake&refresh_token=fake&type=recovery' });
   await tick();
-  assert.equal(h.calls.length, 0);
+  assert.equal(h.calls.length, 1);
+  assert.equal(h.calls[0].options.method, 'GET');
+  assert.equal(h.get('email').value, 'verified@example.test');
+  assert.equal(h.get('email').readOnly, true);
+  assert.equal(h.get('emailLabel').hidden, false);
+  assert.equal(h.get('recoveryAccountHint').hidden, false);
   assert.equal(h.get('confirmLabel').hidden, false);
   assert.equal(h.location.destination, undefined);
   h.get('confirmPassword').value = 'mismatch';
@@ -143,9 +153,35 @@ test('recovery callback asks for a new password rather than skipping to the port
   assert.match(h.get('status').textContent, /no coinciden/);
   h.get('confirmPassword').value = h.get('password').value;
   await submit(h);
-  assert.equal(h.calls[0].options.method, 'PUT');
-  assert.ok(h.calls[0].url.endsWith('/auth/v1/user'));
+  assert.equal(h.calls[1].options.method, 'PUT');
+  assert.deepEqual(h.calls[1].body, { password: 'fake test password only' });
   assert.equal(h.location.destination, 'portal.html#administracion');
+});
+test('invalid recovery token cannot change a password or leave a blank locked email', async () => {
+  const h = harness({
+    hash: '#access_token=fake&refresh_token=fake&type=recovery',
+    failure: true,
+  });
+  await tick();
+  assert.equal(h.get('confirmLabel').hidden, true);
+  assert.equal(h.get('email').readOnly, false);
+  assert.match(h.get('status').textContent, /no se ha cambiado/);
+  assert.equal(
+    h.calls.some((call) => call.options.method === 'PUT'),
+    false,
+  );
+});
+test('saved password is reported separately from denied administrative access', async () => {
+  const h = harness({
+    hash: '#access_token=fake&refresh_token=fake&type=recovery',
+    admin: false,
+  });
+  await tick();
+  h.get('confirmPassword').value = h.get('password').value;
+  await submit(h);
+  assert.match(h.get('status').textContent, /contraseña se guardó correctamente/);
+  assert.equal(h.get('email').readOnly, false);
+  assert.equal(h.location.destination, undefined);
 });
 test('password visibility toggles without changing its value', () => {
   const h = harness();
