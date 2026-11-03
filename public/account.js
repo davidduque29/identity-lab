@@ -30,10 +30,11 @@
       const context = await response.json();
       if (!response.ok)
         throw new Error('Inicia sesión para ver las opciones de tu cuenta.');
-      label.textContent = context.admin ? context.email : 'Visitante';
-      subtitle.textContent = context.admin
-        ? 'Cuenta administradora'
-        : 'Sesión de demostración';
+      document.getElementById('adminAccess').hidden = !!context.admin;
+      menu.hidden = !context.admin;
+      if (!context.admin) return;
+      label.textContent = context.email;
+      subtitle.textContent = 'Cuenta administradora';
       document.getElementById('accountSignIn').hidden = context.admin;
       document.getElementById('accountSignIn').textContent = 'Entrar como administrador';
       document.getElementById('accountSignOut').hidden = !context.admin;
@@ -49,8 +50,8 @@
         avatar.textContent = context.avatar.value;
     })
     .catch(() => {
-      label.textContent = 'Tu cuenta';
-      subtitle.textContent = 'Inicia sesión para ver tus permisos.';
+      menu.hidden = true;
+      document.getElementById('adminAccess').hidden = false;
     })
     .finally(() => clearTimeout(timeout));
 })();

@@ -10,14 +10,14 @@
       content="Laboratorio de biometría facial en tu navegador. Registra y compara tu rostro sin AWS."
     />
     <title>Identity Lab · David</title>
-    <link rel="stylesheet" href="style.css?v=11" />
+    <link rel="stylesheet" href="style.css?v=12" />
     <script defer src="vendor/face-api.min.js"></script>
-    <script defer src="capture-quality.js?v=11"></script>
-    <link rel="stylesheet" href="portal.css?v=11" />
-    <script defer src="workflow.js?v=11"></script>
-    <script defer src="app.js?v=11"></script>
-    <link rel="stylesheet" href="interface.css?v=11" />
-    <script defer src="account.js?v=11"></script>
+    <script defer src="capture-quality.js?v=12"></script>
+    <link rel="stylesheet" href="portal.css?v=12" />
+    <script defer src="workflow.js?v=12"></script>
+    <script defer src="app.js?v=12"></script>
+    <link rel="stylesheet" href="interface.css?v=12" />
+    <script defer src="account.js?v=12"></script>
     <meta name="theme-color" content="#245f4d" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <link rel="manifest" href="manifest.webmanifest" />
@@ -30,21 +30,31 @@
       <a class="brand" href="portal.html"
         ><span class="logo">◈</span> identity<span>lab</span></a
       ><span class="badge">REGISTRO Y VALIDACIÓN</span>
-      <details class="account-menu" id="accountMenu">
+      <a
+        id="adminAccess"
+        class="admin-access"
+        href="admin-login.html"
+        aria-label="Acceder a administración"
+        ><svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="12" cy="8" r="3.5" />
+          <path d="M5 21v-2a7 7 0 0 1 14 0v2" /></svg
+        ><span>Administración</span></a
+      >
+      <details class="account-menu" id="accountMenu" hidden>
         <summary aria-label="Abrir opciones de mi cuenta">
           <span class="account-avatar" id="headerAvatar"
             ><svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <circle cx="12" cy="8" r="3.5" />
               <path d="M5 21v-2a7 7 0 0 1 14 0v2" /></svg></span
-          ><span class="account-button-label">Mi cuenta</span
+          ><span class="account-button-label">Administración</span
           ><span class="account-chevron" aria-hidden="true">⌄</span>
         </summary>
         <div class="account-popover">
           <div class="account-identity">
-            <strong id="accountLabel">Tu cuenta</strong
-            ><small id="accountRole">Consultando permisos…</small>
+            <strong id="accountLabel">Administrador</strong
+            ><small id="accountRole">Cuenta administrativa</small>
           </div>
-          <a class="account-item" href="portal.html">Inicio y sesiones QR</a
+          <a class="account-item" href="portal.html">Inicio</a
           ><a
             id="accountAdminLink"
             class="account-item"
@@ -435,16 +445,8 @@
         </ul>
       </section>
       <footer>
-        <span>identitylab <b>/</b> Construido para aprender, David.</span
-        ><span
-          >Motor: face-api.js · Modelos alojados en este Site ·
-          <a
-            href="https://github.com/justadudewhohacks/face-api.js"
-            target="_blank"
-            rel="noopener"
-            >Código del motor ↗</a
-          ></span
-        >
+        <span>Identity Lab · Registro y comparación facial</span
+        ><a href="portal.html">Inicio</a>
       </footer>
     </main>
   </body>

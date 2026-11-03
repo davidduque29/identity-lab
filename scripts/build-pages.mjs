@@ -1,6 +1,7 @@
 import { cp, mkdir, writeFile, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
+import QRCode from 'qrcode';
 import { readFile, readdir } from 'node:fs/promises';
 const root = resolve(import.meta.dirname, '..');
 const out = resolve(root, 'pages-dist');
@@ -8,6 +9,15 @@ await rm(out, { recursive: true, force: true });
 await mkdir(out, { recursive: true });
 await cp(resolve(root, 'public'), out, { recursive: true });
 await writeFile(resolve(out, '.nojekyll'), '');
+await writeFile(
+  resolve(out, 'images/access-qr.svg'),
+  await QRCode.toString('https://davidduque29.github.io/identity-lab/portal.html', {
+    type: 'svg',
+    errorCorrectionLevel: 'M',
+    margin: 2,
+    color: { dark: '#245f4d', light: '#ffffff' },
+  }),
+);
 const digest = createHash('sha256');
 async function hashFiles(folder) {
   for (const item of (await readdir(folder, { withFileTypes: true })).sort((a, b) =>

@@ -530,3 +530,16 @@ test('separate surnames survive validation and legacy names are not guessed', ()
     validateProfile({ ...base, firstSurname: '', secondSurname: 'Solo' }),
   );
 });
+
+test('storage configuration is returned only to administrators', async () => {
+  const h = harness();
+  const admin = await h.call('context');
+  assert.ok(admin.content.storage);
+  const visitor = await h.call('context', undefined, {
+    actor: 'guest',
+    email: 'guest@example.test',
+  });
+  assert.equal(visitor.content.admin, false);
+  assert.equal(Object.hasOwn(visitor.content, 'storage'), false);
+  assert.equal(Object.hasOwn(visitor.content, 'drive'), false);
+});

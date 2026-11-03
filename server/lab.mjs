@@ -148,12 +148,14 @@ export async function handleLab(request, env) {
                 expiresAt: session.expires_at,
               }
             : null,
-          storage: storage.name,
-          drive: {
-            ready: false,
-            reason:
-              'El destino activo es Supabase. Drive requiere un adaptador autorizado.',
-          },
+          storage: admin ? storage.name : undefined,
+          drive: admin
+            ? {
+                ready: false,
+                reason:
+                  'El destino activo es Supabase. Drive requiere un adaptador autorizado.',
+              }
+            : undefined,
           avatar: avatar ? parse(avatar.payload) : { kind: 'preset', value: '🌿' },
         });
       }

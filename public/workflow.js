@@ -43,7 +43,7 @@
   const section = document.createElement('section');
   section.className = 'workflow-top';
   section.innerHTML =
-    '<strong id="workflowTitle"></strong><p id="workflowStatus" role="status">Comprobando la sesión…</p><a href="portal.html">Inicio y sesiones QR</a>';
+    '<strong id="workflowTitle"></strong><p id="workflowStatus" role="status">Comprobando la sesión…</p><a href="portal.html">Inicio</a>';
   document.querySelector('.workspace').before(section);
   const notice = (message) => {
     $w('workflowStatus').textContent = message;

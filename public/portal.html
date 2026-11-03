@@ -5,16 +5,13 @@
     <script defer src="transport.js"></script>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta
-      name="description"
-      content="Registro y cotejo facial con sesiones QR y administración."
-    />
+    <meta name="description" content="Registro y comparación facial." />
     <title>Identity Lab · Registro y administración</title>
-    <link rel="stylesheet" href="style.css?v=11" />
-    <link rel="stylesheet" href="portal.css?v=11" />
-    <script defer src="portal.js?v=11"></script>
-    <link rel="stylesheet" href="interface.css?v=11" />
-    <script defer src="account.js?v=11"></script>
+    <link rel="stylesheet" href="style.css?v=12" />
+    <link rel="stylesheet" href="portal.css?v=12" />
+    <script defer src="portal.js?v=12"></script>
+    <link rel="stylesheet" href="interface.css?v=12" />
+    <script defer src="account.js?v=12"></script>
     <meta name="theme-color" content="#245f4d" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <link rel="manifest" href="manifest.webmanifest" />
@@ -27,21 +24,31 @@
       <a class="brand" href="portal.html"
         ><span class="logo">◈</span> identity<span>lab</span></a
       ><span class="badge">REGISTRO Y COTEJO FACIAL</span>
-      <details class="account-menu" id="accountMenu">
+      <a
+        id="adminAccess"
+        class="admin-access"
+        href="admin-login.html"
+        aria-label="Acceder a administración"
+        ><svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <circle cx="12" cy="8" r="3.5" />
+          <path d="M5 21v-2a7 7 0 0 1 14 0v2" /></svg
+        ><span>Administración</span></a
+      >
+      <details class="account-menu" id="accountMenu" hidden>
         <summary aria-label="Abrir opciones de mi cuenta">
           <span class="account-avatar" id="headerAvatar"
             ><svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <circle cx="12" cy="8" r="3.5" />
               <path d="M5 21v-2a7 7 0 0 1 14 0v2" /></svg></span
-          ><span class="account-button-label">Mi cuenta</span
+          ><span class="account-button-label">Administración</span
           ><span class="account-chevron" aria-hidden="true">⌄</span>
         </summary>
         <div class="account-popover">
           <div class="account-identity">
-            <strong id="accountLabel">Tu cuenta</strong
-            ><small id="accountRole">Consultando permisos…</small>
+            <strong id="accountLabel">Administrador</strong
+            ><small id="accountRole">Cuenta administrativa</small>
           </div>
-          <a class="account-item" href="portal.html">Inicio y sesiones QR</a
+          <a class="account-item" href="portal.html">Inicio</a
           ><button id="adminToggle" class="account-item" hidden>
             Panel administrativo
           </button>
@@ -64,7 +71,7 @@
           <p class="eyebrow">IDENTITY LAB / RECONOCIMIENTO FACIAL</p>
           <h1>Tu identidad,<br /><span>a la vista.</span></h1>
           <p class="lead">
-            Registra tu rostro y vuelve a verificarlo, desde tu equipo o con un QR.
+            Registra tu rostro o compara una nueva captura con tu registro.
           </p>
           <div class="banner-tags">
             <span>Captura guiada</span><span>Registro y cotejo</span
@@ -79,13 +86,17 @@
           alt="Ilustración de un rostro con puntos de referencia y un marco de escaneo facial"
         />
       </section>
-      <p id="portalStatus" class="step-status" role="status" aria-live="polite">
-        Comprobando acceso…
-      </p>
+      <p
+        id="portalStatus"
+        class="step-status"
+        hidden
+        role="status"
+        aria-live="polite"
+      ></p>
       <a id="signIn" class="primary link-button" href="admin-login.html" hidden
         >Iniciar sesión con la administración</a
       >
-      <section id="userArea" class="portal-grid" hidden>
+      <section id="userArea" class="portal-grid">
         <article class="panel action-panel">
           <p class="eyebrow">PRIMERA VEZ</p>
           <h2>Registrar mi rostro</h2>
@@ -94,9 +105,8 @@
             esa única foto y tu perfil.
           </p>
           <div class="button-row">
-            <button id="registerQr" class="primary">Continuar con QR</button
-            ><a class="secondary link-button" href="index.html?flow=register"
-              >Usar este equipo</a
+            <a class="primary link-button" href="index.html?flow=register"
+              >Registrar mi rostro</a
             >
           </div>
         </article>
@@ -108,40 +118,24 @@
             tu registro en la sesión autorizada.
           </p>
           <div class="button-row">
-            <button id="verifyQr" class="primary">Verificar con QR</button
-            ><a class="secondary link-button" href="index.html?flow=verify"
-              >Usar este equipo</a
+            <a class="primary link-button" href="index.html?flow=verify"
+              >Comparar mi rostro</a
             >
           </div>
         </article>
       </section>
-      <section id="qrPanel" class="panel qr-panel" hidden>
+      <section id="entryQr" class="panel qr-panel entry-qr">
         <div>
-          <p class="eyebrow">CONTINÚA EN TU CELULAR</p>
-          <h2 id="qrTitle">Escanea el QR</h2>
-          <p>
-            Usa la cámara del celular. Se necesita una cuenta con permiso para entrar a
-            este Site.
-          </p>
-          <p id="qrState" role="status"></p>
-          <a id="qrLink" class="text-button" target="_blank" rel="noopener"
-            >Abrir enlace en este equipo</a
-          >
+          <p class="eyebrow">ABRIR EN EL CELULAR</p>
+          <h2>La misma página, en tu celular</h2>
+          <p>Escanea este QR para abrir Identity Lab y elegir qué quieres hacer.</p>
         </div>
-        <div id="qrImage" aria-label="Código QR de la sesión"></div>
-      </section>
-      <section class="panel storage-note">
-        <strong>Destino actual: Supabase: base de datos y fotos privadas.</strong>
-        <p>
-          Datos estructurados en base de datos y fotos en almacenamiento de archivos. El
-          adaptador de Drive está pendiente de habilitación; todavía no se guarda en
-          Drive.
-        </p>
-        <p>
-          No hay prueba de vida ni verificación documental. El formulario contiene datos
-          declarados por el usuario. Esta demo no debe usarse como autenticación de
-          producción.
-        </p>
+        <img
+          src="images/access-qr.svg"
+          width="220"
+          height="220"
+          alt="Código QR para abrir la página de Identity Lab en el celular"
+        />
       </section>
       <section id="adminArea" hidden>
         <div class="admin-title">
@@ -151,6 +145,23 @@
           </div>
           <button id="refreshAdmin" class="secondary">Actualizar</button>
         </div>
+        <section class="panel storage-note">
+          <h3>Almacenamiento e integración</h3>
+          <p id="adminStorage">Consultando destino de almacenamiento…</p>
+          <p>
+            Drive no está habilitado. El cambio de proveedor requiere un adaptador y la
+            migración de los datos existentes.
+          </p>
+          <p>
+            El servicio aún no incluye prueba de vida ni verificación documental. Los
+            datos personales son declarados por la persona. La conexión con aplicaciones
+            cliente y su autorización requieren una integración específica.
+          </p>
+          <p>
+            El QR público solo abre la página. Las reglas de sesiones QR corresponden a la
+            compatibilidad con enlaces anteriores.
+          </p>
+        </section>
         <div class="portal-grid">
           <section class="panel action-panel">
             <span id="adminProfile"></span>
@@ -196,7 +207,7 @@
                 max="1440"
                 required /></label
             ><label
-              >Vigencia del QR (minutos)<input
+              >Vigencia de sesiones QR anteriores (minutos)<input
                 name="qrMinutes"
                 type="number"
                 min="1"
@@ -292,8 +303,8 @@
         <button id="closeProfileDetail" class="secondary">Cerrar</button>
       </dialog>
       <footer>
-        <span>identitylab / Construido para aprender, David.</span
-        ><a href="index.html">Registrar en este equipo</a>
+        <span>Identity Lab · Registro y comparación facial</span
+        ><a href="index.html">Inicio</a>
       </footer>
     </main>
   </body>
