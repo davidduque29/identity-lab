@@ -190,3 +190,38 @@ test('password visibility toggles without changing its value', () => {
   h.get('togglePassword').onclick();
   assert.equal(h.get('password').type, 'password');
 });
+test('recovery button immediately confirms progress and restores after completion', async () => {
+  const h = harness();
+  const sending = h.get('recover').onclick();
+  assert.equal(h.get('recover').textContent, 'Enviando…');
+  assert.equal(h.get('recover').disabled, true);
+  assert.equal(h.get('recover')['aria-busy'], 'true');
+  await sending;
+  assert.equal(h.get('recover').textContent, 'Olvidé mi contraseña');
+  assert.equal(h.get('recover').disabled, false);
+  assert.equal(h.get('status')['data-tone'], 'success');
+});
+test('password feedback distinguishes common patterns, length and confirmation without network requests', async () => {
+  const h = harness({ hash: '#access_token=fake&refresh_token=fake&type=recovery' });
+  await tick();
+  const before = h.calls.length;
+  for (const [password, strength] of [
+    ['', 'Sin evaluar'],
+    ['short', 'Débil'],
+    ['password123456789012345', 'Débil'],
+    ['abcabcabcabcabcabcabc', 'Débil'],
+    ['Lago Cobre!7Faro', 'Media'],
+    ['Bosque! cobre 42 nave Cedro', 'Fuerte'],
+  ]) {
+    h.get('password').value = password;
+    h.get('password').oninput();
+    assert.equal(h.get('strengthText').textContent, strength);
+  }
+  h.get('confirmPassword').value = h.get('password').value;
+  h.get('confirmPassword').oninput();
+  assert.match(h.get('matchRequirement').textContent, /✓/);
+  h.get('confirmPassword').value = 'different';
+  h.get('confirmPassword').oninput();
+  assert.match(h.get('matchRequirement').textContent, /no coinciden/);
+  assert.equal(h.calls.length, before);
+});

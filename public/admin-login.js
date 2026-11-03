@@ -10,6 +10,57 @@
     attempt = 0;
   let recoveryAvailableAt = 0;
 
+  function showStatus(message, tone = 'info') {
+    get('status').textContent = message;
+    get('status').setAttribute('data-tone', tone);
+  }
+  function setButtonBusy(id, busy, label) {
+    get(id).disabled = busy;
+    get(id).setAttribute('aria-busy', String(busy));
+    get(id).textContent = label;
+  }
+  function updatePasswordFeedback() {
+    if (mode !== 'set-password') return;
+    const password = get('password').value;
+    const confirmation = get('confirmPassword').value;
+    const longEnough = [...password].length >= 15;
+    const matches = Boolean(password) && password === confirmation;
+    get('lengthRequirement').textContent = longEnough
+      ? '✓ Mínimo de 15 caracteres cumplido.'
+      : '○ Mínimo 15 caracteres.';
+    get('lengthRequirement').setAttribute('data-met', String(longEnough));
+    get('matchRequirement').textContent = matches
+      ? '✓ Las contraseñas coinciden.'
+      : confirmation
+        ? '○ Las contraseñas todavía no coinciden.'
+        : '○ Confirma tu nueva contraseña.';
+    get('matchRequirement').setAttribute('data-met', String(matches));
+    const normalized = password
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+    const emailName = get('email').value.split('@')[0].toLowerCase();
+    const commonPattern =
+      /password|contrasena|qwerty|12345|abcde|letmein|admin|(.)\1{3}|^(.{1,8})\2+$/i.test(
+        normalized,
+      ) ||
+      (emailName.length >= 4 && normalized.includes(emailName));
+    const variety = new Set(normalized).size;
+    const score = !password
+      ? 0
+      : !longEnough || commonPattern || variety < 7
+        ? 1
+        : [...password].length >= 20 && variety >= 10
+          ? 3
+          : 2;
+    const label = ['Sin evaluar', 'Débil', 'Media', 'Fuerte'][score];
+    get('passwordStrength').value = score;
+    get('passwordStrength').textContent = label;
+    get('strengthText').textContent = label;
+  }
+  get('password').oninput = updatePasswordFeedback;
+  get('confirmPassword').oninput = updatePasswordFeedback;
+
   async function request(path, body, { method = 'POST', token } = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 12000);
@@ -81,9 +132,16 @@
     get('confirmLabel').hidden = next !== 'set-password';
     get('confirmPassword').required = next === 'set-password';
     get('passwordHint').hidden = next !== 'set-password';
+    get('passwordFeedback').hidden = next !== 'set-password';
+    get('passwordLabelText').textContent =
+      next === 'set-password' ? 'Nueva contraseña' : 'Contraseña';
+    get('password').placeholder =
+      next === 'set-password'
+        ? 'Crea una frase de al menos 15 caracteres'
+        : 'Escribe tu contraseña';
     get('password').autocomplete =
       next === 'set-password' ? 'new-password' : 'current-password';
-    get('password').minLength = next === 'set-password' ? 15 : 0;
+    get('password').minLength = 0;
     get('recover').hidden = next === 'set-password';
     get('submit').textContent =
       next === 'set-password' ? 'Guardar contraseña y entrar' : 'Entrar';
@@ -96,6 +154,7 @@
       next === 'set-password'
         ? 'Elige tu contraseña. Después podrás entrar sin solicitar enlaces de correo.'
         : 'Entra con el correo y la contraseña de tu cuenta de Identity Lab.';
+    updatePasswordFeedback();
   }
   get('togglePassword').onclick = () => {
     const show = get('password').type === 'password';
@@ -114,20 +173,19 @@
     get('password').value = '';
     get('confirmPassword').value = '';
     setMode('login');
-    get('status').textContent =
-      'Recuperación cancelada. Puedes iniciar sesión con tu contraseña actual.';
+    showStatus('Recuperación cancelada. Puedes iniciar sesión con tu contraseña actual.');
   };
   get('recover').onclick = async () => {
     if (pending) return;
     attempt++;
     if (!get('email').reportValidity()) return;
     if (Date.now() < recoveryAvailableAt) {
-      get('status').textContent =
-        'Espera antes de solicitar otro correo de recuperación.';
+      showStatus('Espera antes de solicitar otro correo de recuperación.');
       return;
     }
     pending = true;
-    get('recover').disabled = true;
+    setButtonBusy('recover', true, 'Enviando…');
+    showStatus('Estamos enviando tu enlace de recuperación…');
     try {
       const redirect = new URL('admin-login.html', location.href);
       redirect.hash = '';
@@ -135,13 +193,15 @@
         email: get('email').value.trim(),
       });
       recoveryAvailableAt = Date.now() + 60000;
-      get('status').textContent =
-        'Si el correo tiene una cuenta, recibirás un enlace para configurar tu contraseña. Abre únicamente el mensaje más reciente. Este correo solo se necesita para recuperar o configurar la contraseña.';
+      showStatus(
+        'Solicitud recibida. Si el correo corresponde a una cuenta, recibirás un enlace para elegir una nueva contraseña. Revisa también el correo no deseado y abre únicamente el mensaje más reciente.',
+        'success',
+      );
     } catch (error) {
-      get('status').textContent = error.message;
+      showStatus(error.message, 'error');
     } finally {
       pending = false;
-      get('recover').disabled = false;
+      setButtonBusy('recover', false, 'Olvidé mi contraseña');
     }
   };
   get('login').onsubmit = async (event) => {
@@ -149,14 +209,16 @@
     if (pending) return;
     const current = ++attempt;
     pending = true;
-    get('submit').disabled = true;
-    get('status').textContent = 'Validando tu acceso…';
+    setButtonBusy('submit', true, mode === 'set-password' ? 'Guardando…' : 'Entrando…');
+    showStatus(
+      mode === 'set-password' ? 'Guardando tu nueva contraseña…' : 'Validando tu acceso…',
+    );
     let passwordSaved = false;
     try {
       let session;
       if (mode === 'set-password') {
         const password = get('password').value;
-        if (password.length < 15)
+        if ([...password].length < 15)
           throw new Error('La contraseña debe tener al menos 15 caracteres.');
         if (password !== get('confirmPassword').value)
           throw new Error('Las contraseñas no coinciden.');
@@ -181,15 +243,20 @@
         if (passwordSaved) {
           recoveryToken = null;
           setMode('login');
-          get('status').textContent =
+          showStatus(
             'Tu contraseña se guardó correctamente, pero no pudimos abrir el panel. ' +
-            error.message +
-            ' Puedes volver a entrar con tu correo y tu nueva contraseña.';
-        } else get('status').textContent = error.message;
+              error.message +
+              ' Puedes volver a entrar con tu correo y tu nueva contraseña.',
+          );
+        } else showStatus(error.message, 'error');
       }
     } finally {
       pending = false;
-      get('submit').disabled = false;
+      setButtonBusy(
+        'submit',
+        false,
+        mode === 'set-password' ? 'Guardar contraseña y entrar' : 'Entrar',
+      );
     }
   };
 
@@ -197,8 +264,9 @@
     const current = ++attempt;
     if (callback.get('error') || callback.get('error_description')) {
       history.replaceState(null, '', location.pathname);
-      get('status').textContent =
-        'El enlace ya se utilizó o venció. Puedes entrar con tu contraseña o solicitar recuperación.';
+      showStatus(
+        'El enlace ya se utilizó o venció. Puedes entrar con tu contraseña o solicitar recuperación.',
+      );
       return;
     }
     if (location.hash === '#salir') {
@@ -206,7 +274,7 @@
       localStorage.removeItem(storageKey);
       sessionStorage.removeItem('identity-lab:qr');
       history.replaceState(null, '', location.pathname);
-      get('status').textContent = 'Sesión administrativa cerrada.';
+      showStatus('Sesión administrativa cerrada.');
       if (session)
         await request('/auth/v1/logout', null, { token: session.access_token }).catch(
           () => {},
@@ -231,7 +299,7 @@
       get('recoveryAccountHint').hidden = true;
       pending = true;
       get('submit').disabled = true;
-      get('status').textContent = 'Comprobando la cuenta del enlace recibido…';
+      showStatus('Comprobando la cuenta del enlace recibido…');
       try {
         const user = await request('/auth/v1/user', null, {
           method: 'GET',
@@ -244,23 +312,25 @@
         get('email').value = user.email;
         get('emailLabel').hidden = false;
         get('recoveryAccountHint').hidden = false;
-        get('status').textContent =
-          'Cuenta verificada. Escribe y confirma tu nueva contraseña para continuar.';
+        showStatus(
+          'Cuenta verificada. Escribe y confirma tu nueva contraseña para continuar.',
+        );
       } catch (error) {
         if (current !== attempt) return;
         recoveryToken = null;
         setMode('login');
-        get('status').textContent =
+        showStatus(
           'No pudimos comprobar el enlace. ' +
-          error.message +
-          ' Tu contraseña no se ha cambiado.';
+            error.message +
+            ' Tu contraseña no se ha cambiado.',
+        );
       } finally {
         pending = false;
         get('submit').disabled = false;
       }
       return;
     }
-    get('status').textContent = 'Comprobando tu sesión administrativa…';
+    showStatus('Comprobando tu sesión administrativa…');
     try {
       if (!session.expires_at || session.expires_at <= Date.now() / 1000 + 60)
         session = await request('/auth/v1/token?grant_type=refresh_token', {
@@ -270,8 +340,7 @@
     } catch (error) {
       if (current === attempt) {
         localStorage.removeItem(storageKey);
-        get('status').textContent =
-          error.message + ' Puedes entrar con tu correo y contraseña.';
+        showStatus(error.message + ' Puedes entrar con tu correo y contraseña.');
       }
     }
   })();

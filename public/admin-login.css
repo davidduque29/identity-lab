@@ -1,0 +1,195 @@
+.icon-definitions {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+.access-icon {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.access-heading {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.access-emblem {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  flex: 0 0 52px;
+  border-radius: 16px;
+  background: #e5efed;
+  color: #245f4d;
+}
+.access-emblem .access-icon {
+  width: 30px;
+  height: 30px;
+}
+.admin-login-page .access-heading h1 {
+  margin: 0;
+  font-size: clamp(25px, 5vw, 36px);
+}
+.field-label {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.field-label .access-icon {
+  width: 19px;
+  height: 19px;
+  color: #43695f;
+}
+.admin-login-page input::placeholder {
+  color: #697b76;
+  opacity: 1;
+  font-weight: 400;
+}
+.admin-login-page input[readonly] {
+  background: #eff4f2;
+  color: #39564b;
+}
+.admin-login-page .password-field {
+  margin-top: 7px;
+}
+.admin-login-page .password-field input {
+  margin-top: 0;
+}
+.admin-login-page button,
+.back-to-lab {
+  transition:
+    background-color 0.16s,
+    box-shadow 0.16s,
+    transform 0.1s;
+}
+.admin-login-page button:active:not(:disabled),
+.back-to-lab:active {
+  transform: translateY(2px);
+}
+.admin-login-page button:hover:not(:disabled) {
+  box-shadow: 0 3px 10px #173e2920;
+}
+.admin-login-page button[aria-busy='true'] {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  opacity: 0.85;
+}
+.admin-login-page button[aria-busy='true']::before {
+  content: '';
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: access-spin 0.75s linear infinite;
+}
+@keyframes access-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.admin-login-page #status:empty {
+  display: none;
+}
+.admin-login-page #status:not(:empty),
+#recoveryAccountHint {
+  padding: 14px 16px;
+  border: 1px solid #bdd3e8;
+  border-left: 4px solid #3875aa;
+  border-radius: 10px;
+  background: #edf5fc;
+  color: #204c70;
+  font-size: 14px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.admin-login-page #status[data-tone='error'] {
+  border-color: #edc2bc;
+  border-left-color: #a43c30;
+  background: #fff2ef;
+  color: #822c24;
+}
+.admin-login-page #status[data-tone='success'] {
+  border-color: #b8d9c7;
+  border-left-color: #287350;
+  background: #edf8f1;
+  color: #225c40;
+}
+.back-to-lab {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 11px 14px;
+  margin-top: 18px;
+  border-radius: 9px;
+  color: #245f4d;
+  background: #edf3ef;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 14px;
+}
+.back-to-lab:hover {
+  background: #dfece5;
+}
+.back-to-lab:focus-visible,
+.admin-login-page button:focus-visible {
+  outline: 3px solid #3979b5;
+  outline-offset: 3px;
+}
+.password-feedback {
+  padding: 14px 16px;
+  margin: 12px 0 20px;
+  border-radius: 10px;
+  background: #f3f6f4;
+}
+.password-feedback p {
+  margin: 5px 0;
+  font-size: 13px;
+}
+.admin-login-page .strength-label {
+  margin: 12px 0 4px;
+  font-size: 13px;
+}
+#passwordStrength {
+  display: block;
+  width: 100%;
+  height: 15px;
+}
+.password-feedback .strength-note {
+  color: #52665e;
+  font-size: 12px;
+}
+.password-feedback [data-met='true'] {
+  color: #246443;
+}
+@media (max-width: 480px) {
+  .access-heading {
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .access-emblem {
+    width: 42px;
+    height: 42px;
+    flex-basis: 42px;
+  }
+  .admin-login-page #recover {
+    width: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .admin-login-page button,
+  .back-to-lab {
+    transition: none;
+  }
+  .admin-login-page button[aria-busy='true']::before {
+    animation: none;
+  }
+}
