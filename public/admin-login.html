@@ -7,16 +7,20 @@
     <link rel="stylesheet" href="style.css" />
     <link rel="stylesheet" href="portal.css" />
     <script src="deployment-config.js"></script>
-    <script defer src="transport.js"></script>
     <script defer src="admin-login.js"></script>
+    <meta name="theme-color" content="#245f4d" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="icons/icon-180.png" />
+    <link rel="stylesheet" href="pwa.css" />
+    <script defer src="pwa.js"></script>
   </head>
   <body>
     <main class="shell">
       <section class="panel profile-form">
         <h1>Acceso administrativo</h1>
-        <p>
-          Los visitantes usan la cámara sin cuenta de ChatGPT. Este acceso es solo para
-          administrar el laboratorio.
+        <p id="loginInstruction">
+          Entra con el correo y la contraseña de tu cuenta de Identity Lab.
         </p>
         <form id="login">
           <label
@@ -24,22 +28,46 @@
               id="email"
               type="email"
               required
-              autocomplete="email" /></label
-          ><label id="codeLabel" hidden
-            >Código del correo<input
-              id="code"
-              inputmode="numeric"
-              autocomplete="one-time-code"
-              maxlength="12" /></label
-          ><button class="primary" id="submit">Enviar enlace de acceso</button>
+              autocomplete="username"
+          /></label>
+          <label
+            >Contraseña
+            <div class="password-field">
+              <input
+                id="password"
+                type="password"
+                required
+                autocomplete="current-password"
+              /><button
+                id="togglePassword"
+                class="secondary"
+                type="button"
+                aria-label="Mostrar contraseña"
+                aria-pressed="false"
+              >
+                Mostrar
+              </button>
+            </div></label
+          >
+          <label id="confirmLabel" hidden
+            >Confirma tu contraseña<input
+              id="confirmPassword"
+              type="password"
+              autocomplete="new-password"
+          /></label>
+          <p id="passwordHint" hidden>
+            Usa al menos 15 caracteres. Puedes usar una frase con espacios. No reutilices
+            una contraseña de otro servicio.
+          </p>
+          <button class="primary" id="submit" type="submit">Entrar</button>
         </form>
-        <button id="useCode" class="secondary" type="button" hidden>
-          Mi correo trae un código
+        <button id="recover" class="secondary" type="button">
+          Olvidé mi contraseña / Configurar contraseña
         </button>
-        <button id="resend" class="secondary" type="button" hidden>
-          Reenviar enlace
+        <button id="cancelRecovery" class="secondary" type="button" hidden>
+          Volver al inicio de sesión
         </button>
-        <p id="status" role="status"></p>
+        <p id="status" role="status" aria-live="polite"></p>
         <a href="portal.html">Volver al laboratorio</a>
       </section>
     </main>

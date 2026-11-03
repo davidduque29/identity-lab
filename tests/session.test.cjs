@@ -577,13 +577,35 @@ test('portrait camera and rotation keep the viewport and oval in the same coordi
     "$('video').videoWidth=480; $('video').videoHeight=640; $('video').parentElement={style:{}}; syncCameraGeometry()",
     h.context,
   );
-  assert.equal(h.nodes.get('video').parentElement.style.aspectRatio, '480 / 640');
+  assert.equal(h.nodes.get('video').parentElement.style.aspectRatio, '0.75');
   assert.equal(h.nodes.get('alignmentGuide').attributes.viewBox, '0 0 480 640');
   assert.equal(h.nodes.get('guideEllipse').attributes.cx, 240);
   vm.runInContext(
     "$('video').videoWidth=640; $('video').videoHeight=480; syncCameraGeometry()",
     h.context,
   );
-  assert.equal(h.nodes.get('video').parentElement.style.aspectRatio, '640 / 480');
+  assert.equal(h.nodes.get('video').parentElement.style.aspectRatio, String(640 / 480));
   assert.equal(h.nodes.get('alignmentGuide').attributes.viewBox, '0 0 640 480');
+});
+
+test('visible camera preview draws the complete source frame and stops without retaining pixels', () => {
+  const h = createHarness(),
+    draws = [],
+    clears = [];
+  vm.runInContext(
+    "stream={}; $('video').readyState=2; $('video').videoWidth=480; $('video').videoHeight=640",
+    h.context,
+  );
+  const preview = h.context.document.getElementById('cameraPreview');
+  preview.getContext = () => ({
+    drawImage: (...args) => draws.push(args),
+    clearRect: (...args) => clears.push(args),
+  });
+  h.context.window.requestAnimationFrame = () => 123;
+  h.context.window.cancelAnimationFrame = () => {};
+  vm.runInContext('paintCameraPreview(); stopCameraPreview()', h.context);
+  assert.equal(preview.width, 480);
+  assert.equal(preview.height, 640);
+  assert.deepEqual(draws[0].slice(1), [0, 0, 480, 640]);
+  assert.deepEqual(clears[0], [0, 0, 480, 640]);
 });

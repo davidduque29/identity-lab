@@ -260,3 +260,19 @@ body > .shell > .profile-form h1 {
   line-height: 1.15;
   overflow-wrap: anywhere;
 }
+
+.password-field {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.password-field input {
+  flex: 1;
+  min-width: 0;
+}
+.password-field button {
+  flex: 0 0 auto;
+}
+.profile-form > button {
+  margin-top: 12px;
+}

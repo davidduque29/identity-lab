@@ -1,132 +1,235 @@
 'use strict';
 (() => {
   const config = window.IDENTITY_DEPLOYMENT;
-  const status = document.getElementById('status');
-  let codeMode = false;
-  let resendAt = 0;
+  const get = (id) => document.getElementById(id);
+  const storageKey = 'identity-lab:admin';
   const callback = new URLSearchParams(location.hash.slice(1));
-  if (callback.get('access_token') && callback.get('refresh_token')) {
-    localStorage.setItem(
-      'identity-lab:admin',
-      JSON.stringify({
-        access_token: callback.get('access_token'),
-        refresh_token: callback.get('refresh_token'),
-        expires_at:
-          Math.floor(Date.now() / 1000) + Number(callback.get('expires_in') || 3600),
-      }),
-    );
-    history.replaceState(null, '', location.pathname);
-    location.replace('portal.html#administracion');
-    return;
-  }
-  if (callback.get('error_description')) {
-    status.textContent = 'El enlace no es válido o venció. Solicita uno nuevo.';
-    history.replaceState(null, '', location.pathname);
-  }
-  document.getElementById('useCode').onclick = () => {
-    codeMode = true;
-    document.getElementById('codeLabel').hidden = false;
-    document.getElementById('code').required = true;
-    document.getElementById('submit').hidden = false;
-    document.getElementById('submit').textContent = 'Validar código';
-    document.getElementById('code').focus();
-  };
-  document.getElementById('resend').onclick = () => {
-    if (Date.now() < resendAt) {
-      status.textContent =
-        'Espera ' +
-        Math.ceil((resendAt - Date.now()) / 1000) +
-        ' segundos antes de pedir otro enlace.';
-      return;
-    }
-    codeMode = false;
-    document.getElementById('code').required = false;
-    document.getElementById('codeLabel').hidden = true;
-    document.getElementById('login').requestSubmit();
-  };
-  if (location.hash === '#salir') {
-    const session = JSON.parse(localStorage.getItem('identity-lab:admin') || 'null');
-    localStorage.removeItem('identity-lab:admin');
-    sessionStorage.removeItem('identity-lab:qr');
-    if (session)
-      fetch(config.url + '/auth/v1/logout', {
-        method: 'POST',
+  let mode = 'login',
+    recoveryToken = null,
+    pending = false,
+    attempt = 0;
+  let recoveryAvailableAt = 0;
+
+  async function request(path, body, { method = 'POST', token } = {}) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 12000);
+    try {
+      const response = await fetch(config.url + path, {
+        method,
+        cache: 'no-store',
+        signal: controller.signal,
         headers: {
           apikey: config.publishableKey,
-          Authorization: 'Bearer ' + session.access_token,
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: 'Bearer ' + token } : {}),
         },
-      }).catch(() => {});
-    status.textContent = 'Sesión administrativa cerrada.';
-  }
-  if (
-    location.hash !== '#salir' &&
-    localStorage.getItem('identity-lab:admin') &&
-    window.IdentityTransport
-  ) {
-    status.textContent = 'Comprobando tu sesión administrativa…';
-    window.IdentityTransport.fetch('/api/lab?action=context')
-      .then(async (response) => {
-        const context = await response.json();
-        if (response.ok && context.admin) location.replace('portal.html#administracion');
-        else
-          status.textContent = response.ok
-            ? 'Esta sesión no tiene permisos administrativos. Usa el correo autorizado.'
-            : 'No se pudo validar tu sesión. Puedes solicitar un enlace nuevo.';
-      })
-      .catch(() => {
-        status.textContent = 'No se pudo comprobar tu sesión. Revisa la conexión.';
+        ...(body ? { body: JSON.stringify(body) } : {}),
       });
-  }
-  document.getElementById('login').onsubmit = async (event) => {
-    event.preventDefault();
-    const button = document.getElementById('submit');
-    button.disabled = true;
-    try {
-      const email = document.getElementById('email').value.trim();
-      const response = await fetch(
-        config.url +
-          '/auth/v1/' +
-          (codeMode
-            ? 'verify'
-            : 'otp?redirect_to=' +
-              encodeURIComponent(new URL('admin-login.html', location.href).href)),
-        {
-          method: 'POST',
-          headers: { apikey: config.publishableKey, 'Content-Type': 'application/json' },
-          body: JSON.stringify(
-            codeMode
-              ? {
-                  email,
-                  token: document.getElementById('code').value.trim(),
-                  type: 'email',
-                }
-              : { email, create_user: false },
-          ),
-        },
-      );
-      const result = await response.json();
-      if (!response.ok)
-        throw new Error(
+      const value = await response.json();
+      if (!response.ok) {
+        const message =
           response.status === 429
-            ? 'Supabase alcanzó el límite temporal de envíos de correo. Recargar o solicitar más enlaces no elimina la pausa. Intenta más tarde y usa únicamente el correo más reciente.'
-            : result.msg || result.message || 'No se pudo completar el acceso.',
-        );
-      if (codeMode) {
-        localStorage.setItem('identity-lab:admin', JSON.stringify(result));
-        location.replace('portal.html#administracion');
-      } else {
-        resendAt = Date.now() + 60000;
-        document.getElementById('useCode').hidden = false;
-        document.getElementById('resend').hidden = false;
-        document.getElementById('email').readOnly = true;
-        button.hidden = true;
-        status.textContent =
-          'Solicitud aceptada. Revisa la bandeja de entrada y correo no deseado del correo indicado. Abre el enlace del mensaje más reciente de Identity Lab; no necesitas un código numérico. Si tu plantilla sí incluye un código, pulsa «Mi correo trae un código».';
+            ? 'Supabase ha pausado temporalmente esta operación por límite de intentos o correos. No solicites más enlaces seguidos.'
+            : path.includes('/token')
+              ? 'Correo o contraseña incorrectos. Si no la recuerdas, usa «Olvidé mi contraseña».'
+              : value.msg ||
+                value.message ||
+                value.error_description ||
+                value.error ||
+                'No se pudo completar la operación.';
+        throw new Error(message);
       }
+      return value;
     } catch (error) {
-      status.textContent = error.message;
+      if (controller.signal.aborted)
+        throw new Error(
+          'La comprobación tardó demasiado. Revisa tu conexión e inténtalo nuevamente.',
+        );
+      throw error;
     } finally {
-      button.disabled = false;
+      clearTimeout(timer);
+    }
+  }
+  function readSession() {
+    try {
+      return JSON.parse(localStorage.getItem(storageKey) || 'null');
+    } catch {
+      localStorage.removeItem(storageKey);
+      return null;
+    }
+  }
+  async function authorize(session, current) {
+    const context = await request('/functions/v1/identity-api?action=context', null, {
+      method: 'GET',
+      token: session.access_token,
+    });
+    if (!context.admin)
+      throw new Error('Tu cuenta no tiene permisos de administración en Identity Lab.');
+    if (current !== attempt) return;
+    localStorage.setItem(
+      storageKey,
+      JSON.stringify({
+        ...session,
+        expires_at:
+          session.expires_at || Math.floor(Date.now() / 1000) + session.expires_in,
+      }),
+    );
+    location.replace('portal.html#administracion');
+  }
+  function setMode(next) {
+    mode = next;
+    get('confirmLabel').hidden = next !== 'set-password';
+    get('confirmPassword').required = next === 'set-password';
+    get('passwordHint').hidden = next !== 'set-password';
+    get('password').autocomplete =
+      next === 'set-password' ? 'new-password' : 'current-password';
+    get('password').minLength = next === 'set-password' ? 15 : 0;
+    get('recover').hidden = next === 'set-password';
+    get('submit').textContent =
+      next === 'set-password' ? 'Guardar contraseña y entrar' : 'Entrar';
+    get('email').required = next !== 'set-password';
+    get('email').readOnly = next === 'set-password';
+    get('cancelRecovery').hidden = next !== 'set-password';
+    get('loginInstruction').textContent =
+      next === 'set-password'
+        ? 'Elige tu contraseña. Después podrás entrar sin solicitar enlaces de correo.'
+        : 'Entra con el correo y la contraseña de tu cuenta de Identity Lab.';
+  }
+  get('togglePassword').onclick = () => {
+    const show = get('password').type === 'password';
+    get('password').type = show ? 'text' : 'password';
+    get('togglePassword').textContent = show ? 'Ocultar' : 'Mostrar';
+    get('togglePassword').setAttribute(
+      'aria-label',
+      show ? 'Ocultar contraseña' : 'Mostrar contraseña',
+    );
+    get('togglePassword').setAttribute('aria-pressed', String(show));
+  };
+  get('cancelRecovery').onclick = () => {
+    attempt++;
+    recoveryToken = null;
+    localStorage.removeItem(storageKey);
+    get('password').value = '';
+    get('confirmPassword').value = '';
+    setMode('login');
+    get('status').textContent =
+      'Recuperación cancelada. Puedes iniciar sesión con tu contraseña actual.';
+  };
+  get('recover').onclick = async () => {
+    if (pending) return;
+    attempt++;
+    if (!get('email').reportValidity()) return;
+    if (Date.now() < recoveryAvailableAt) {
+      get('status').textContent =
+        'Espera antes de solicitar otro correo de recuperación.';
+      return;
+    }
+    pending = true;
+    get('recover').disabled = true;
+    try {
+      const redirect = new URL('admin-login.html', location.href);
+      redirect.hash = '';
+      await request('/auth/v1/recover?redirect_to=' + encodeURIComponent(redirect.href), {
+        email: get('email').value.trim(),
+      });
+      recoveryAvailableAt = Date.now() + 60000;
+      get('status').textContent =
+        'Si el correo tiene una cuenta, recibirás un enlace para configurar tu contraseña. Abre únicamente el mensaje más reciente. Este correo solo se necesita para recuperar o configurar la contraseña.';
+    } catch (error) {
+      get('status').textContent = error.message;
+    } finally {
+      pending = false;
+      get('recover').disabled = false;
     }
   };
+  get('login').onsubmit = async (event) => {
+    event.preventDefault();
+    if (pending) return;
+    const current = ++attempt;
+    pending = true;
+    get('submit').disabled = true;
+    get('status').textContent = 'Validando tu acceso…';
+    try {
+      let session;
+      if (mode === 'set-password') {
+        const password = get('password').value;
+        if (password.length < 15)
+          throw new Error('La contraseña debe tener al menos 15 caracteres.');
+        if (password !== get('confirmPassword').value)
+          throw new Error('Las contraseñas no coinciden.');
+        await request(
+          '/auth/v1/user',
+          { password },
+          { method: 'PUT', token: recoveryToken.access_token },
+        );
+        session = recoveryToken;
+        get('confirmPassword').value = '';
+      } else {
+        session = await request('/auth/v1/token?grant_type=password', {
+          email: get('email').value.trim(),
+          password: get('password').value,
+        });
+      }
+      get('password').value = '';
+      await authorize(session, current);
+    } catch (error) {
+      if (current === attempt) get('status').textContent = error.message;
+    } finally {
+      pending = false;
+      get('submit').disabled = false;
+    }
+  };
+
+  (async () => {
+    const current = ++attempt;
+    if (callback.get('error') || callback.get('error_description')) {
+      history.replaceState(null, '', location.pathname);
+      get('status').textContent =
+        'El enlace ya se utilizó o venció. Puedes entrar con tu contraseña o solicitar recuperación.';
+      return;
+    }
+    if (location.hash === '#salir') {
+      const session = readSession();
+      localStorage.removeItem(storageKey);
+      sessionStorage.removeItem('identity-lab:qr');
+      history.replaceState(null, '', location.pathname);
+      get('status').textContent = 'Sesión administrativa cerrada.';
+      if (session)
+        await request('/auth/v1/logout', null, { token: session.access_token }).catch(
+          () => {},
+        );
+      return;
+    }
+    let session =
+      callback.get('access_token') && callback.get('refresh_token')
+        ? {
+            access_token: callback.get('access_token'),
+            refresh_token: callback.get('refresh_token'),
+            expires_at:
+              Math.floor(Date.now() / 1000) + Number(callback.get('expires_in') || 3600),
+          }
+        : readSession();
+    if (!session) return;
+    if (callback.get('access_token')) history.replaceState(null, '', location.pathname);
+    if (callback.get('type') === 'recovery') {
+      recoveryToken = session;
+      setMode('set-password');
+      get('status').textContent = 'Enlace recibido. Define tu contraseña para continuar.';
+      return;
+    }
+    get('status').textContent = 'Comprobando tu sesión administrativa…';
+    try {
+      if (!session.expires_at || session.expires_at <= Date.now() / 1000 + 60)
+        session = await request('/auth/v1/token?grant_type=refresh_token', {
+          refresh_token: session.refresh_token,
+        });
+      await authorize(session, current);
+    } catch (error) {
+      if (current === attempt) {
+        localStorage.removeItem(storageKey);
+        get('status').textContent =
+          error.message + ' Puedes entrar con tu correo y contraseña.';
+      }
+    }
+  })();
 })();

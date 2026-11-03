@@ -16,6 +16,7 @@ let captureReady = false,
   stableFrames = 0,
   lastAssessmentAt = 0,
   lastBox = null;
+let previewFrame = null;
 let autoCaptureMode = null,
   autoCapturePending = false;
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -725,6 +726,7 @@ function showAttempt(a) {
   showUserResult(a.match, similarityDisplay(a.mean, a.threshold));
 }
 function stop({ completed = false, registered = false } = {}) {
+  stopCameraPreview();
   autoCaptureMode = null;
   if (busy && !completed && !registered)
     showCaptureProgress(
@@ -767,11 +769,34 @@ function stop({ completed = false, registered = false } = {}) {
   busy = false;
   controls();
 }
+function stopCameraPreview() {
+  if (previewFrame !== null) window.cancelAnimationFrame?.(previewFrame);
+  previewFrame = null;
+  const preview = $('cameraPreview');
+  if (preview?.getContext)
+    preview.getContext('2d').clearRect(0, 0, preview.width, preview.height);
+}
+function paintCameraPreview() {
+  const video = $('video'),
+    preview = $('cameraPreview');
+  if (!stream || !preview?.getContext || !window.requestAnimationFrame) return;
+  if (video.readyState >= 2 && video.videoWidth && video.videoHeight) {
+    if (preview.width !== video.videoWidth || preview.height !== video.videoHeight) {
+      preview.width = video.videoWidth;
+      preview.height = video.videoHeight;
+      syncCameraGeometry();
+    }
+    preview.getContext('2d').drawImage(video, 0, 0, preview.width, preview.height);
+  }
+  previewFrame = window.requestAnimationFrame(paintCameraPreview);
+}
 function syncCameraGeometry() {
   const video = $('video');
   if (!video.videoWidth || !video.videoHeight) return;
   if (video.parentElement) {
-    video.parentElement.style.aspectRatio = video.videoWidth + ' / ' + video.videoHeight;
+    video.parentElement.style.aspectRatio = String(
+      Math.max(0.75, Math.min(1.5, video.videoWidth / video.videoHeight)),
+    );
   }
   $('alignmentGuide').setAttribute(
     'viewBox',
@@ -831,6 +856,7 @@ async function start() {
     await $('video').play();
     if (token !== generation) return;
     syncCameraGeometry();
+    paintCameraPreview();
     $('empty').style.display = 'none';
     $('cameraStatus').textContent = 'Cámara activa';
     autoCaptureMode = comparison ? 'comparison' : 'reference';

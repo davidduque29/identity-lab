@@ -6,6 +6,10 @@
   // The email may return to the site root or portal, not only the login page.
   const callback = new URLSearchParams(location.hash.slice(1));
   if (callback.get('access_token') && callback.get('refresh_token')) {
+    if (callback.get('type') === 'recovery') {
+      location.replace('admin-login.html' + location.hash);
+      return;
+    }
     localStorage.setItem(
       prefix + 'admin',
       JSON.stringify({
